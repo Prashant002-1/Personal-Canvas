@@ -1,7 +1,6 @@
 # Environment
 .env
 .env.*
-!.env.example
 
 # Node
 node_modules/
@@ -13,6 +12,9 @@ pnpm-debug.log*
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Next.js
+.next/
 
 # TypeScript
 *.tsbuildinfo
@@ -63,3 +65,9 @@ Desktop.ini
 # Markdown
 *.md
 !docs/**/*.md
+.claude/
+.cursor/
+.gemini/
+.mcp.json
+.tessl/
+tessl.json
