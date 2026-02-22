@@ -60,5 +60,6 @@ Desktop.ini
 *.temp
 .cache/
 
-
+# Markdown
 *.md
+!docs/**/*.md
