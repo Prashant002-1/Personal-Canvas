@@ -1,8 +1,7 @@
 import { query } from "@/lib/db";
 import Link from "next/link";
-import { Calendar, BookOpen, Clock, ChevronRight, LayoutDashboard } from "lucide-react";
+import { Calendar, BookOpen, Clock, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { DashboardView } from "@/components/ai/DashboardView";
 
 type CourseRow = {
@@ -10,6 +9,8 @@ type CourseRow = {
   name: string;
   code: string;
   term_name: string | null;
+  current_score: number | null;
+  current_grade: string | null;
 };
 
 type UpcomingAssignmentRow = {
@@ -29,9 +30,13 @@ const CARD_GRADIENTS = [
 ];
 
 export default async function Home() {
-  const { rows: courses } = await query<CourseRow>(
-    "SELECT id, name, code, term_name FROM courses ORDER BY id"
-  );
+  const { rows: courses } = await query<CourseRow>(`
+    SELECT c.id, c.name, c.code, c.term_name,
+           ce.current_score, ce.current_grade
+    FROM courses c
+    LEFT JOIN course_enrollments ce ON ce.course_id = c.id AND ce.type = 'StudentEnrollment'
+    ORDER BY c.id
+  `);
 
   const { rows: upcomingAssignments } = await query<UpcomingAssignmentRow>(`
     SELECT a.id, a.name, a.due_at, c.name as course_name, c.code as course_code, c.id as course_id
@@ -43,20 +48,11 @@ export default async function Home() {
   `);
 
   return (
-    <main className="min-h-screen p-8 max-w-7xl mx-auto">
-      <header className="mb-12 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center shadow-sm">
-              <LayoutDashboard className="w-5 h-5" />
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight">Personal Canvas</h1>
-          </div>
-          <p className="text-muted-foreground text-lg ml-13">
-            Welcome back. Here's what's happening in your courses.
-          </p>
-        </div>
-      </header>
+    <main className="min-h-[calc(100vh-3.5rem)] p-8 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
+        <p className="text-muted-foreground mt-1">Here's what's happening in your courses.</p>
+      </div>
 
       {courses.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center border rounded-2xl bg-card/50 backdrop-blur-sm">
@@ -110,11 +106,24 @@ export default async function Home() {
                           </div>
                           
                           <div className="space-y-3">
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                              <span>Course Progress</span>
-                              <span>In Progress</span>
+                            <div className="flex items-center justify-between">
+                              {course.current_grade ? (
+                                <span className="text-sm font-semibold text-foreground">{course.current_grade}</span>
+                              ) : null}
+                              {course.current_score !== null ? (
+                                <span className="text-xs text-muted-foreground">{course.current_score.toFixed(1)}%</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">No grade yet</span>
+                              )}
                             </div>
-                            <Progress value={33} className="h-1.5" />
+                            {course.current_score !== null && (
+                              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full bg-primary/70 rounded-full transition-all"
+                                  style={{ width: `${Math.min(course.current_score, 100)}%` }}
+                                />
+                              </div>
+                            )}
                             
                             <div className="pt-2 flex items-center text-sm font-medium text-primary opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                               Open Workspace <ChevronRight className="w-4 h-4 ml-1" />

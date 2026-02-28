@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ChatInterface } from "@/components/ai/ChatInterface";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles } from "lucide-react";
-import { readSessionJson } from "@/lib/client-storage";
+import { readSessionJson, readLocalJson } from "@/lib/client-storage";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 type ChatContext = {
   type: "dashboard" | "course";
@@ -31,43 +30,32 @@ function toChatId(context: ChatContext | null): string {
 }
 
 export default function ChatPage() {
-  const router = useRouter();
   const [context, setContext] = useState<ChatContext | null>(null);
+  const [botName, setBotName] = useState<string | null>(null);
   const chatId = toChatId(context);
 
   useEffect(() => {
     const storedContext = readSessionJson<ChatContext>("chat-context");
-    if (storedContext) {
-      setContext(storedContext);
-    }
+    if (storedContext) setContext(storedContext);
+    const name = readLocalJson<string>("canvas-bot-name");
+    if (name) setBotName(name);
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <div className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full shrink-0">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-2 min-w-0">
-            <Sparkles className="w-5 h-5 text-primary shrink-0" />
-            <div className="min-w-0">
-              <h1 className="font-semibold text-base leading-tight truncate">AI Assistant</h1>
-              {context?.title && (
-                <p className="text-xs text-muted-foreground truncate">{context.title}</p>
-              )}
-            </div>
-          </div>
+    <div className="bg-background">
+      {context?.title && (
+        <div className="border-b bg-background/80 backdrop-blur-md px-6 py-3 flex items-center gap-3">
+          <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <span className="text-sm text-muted-foreground">{context.title}</span>
         </div>
-      </div>
-
-      <div className="flex-1 max-w-4xl w-full mx-auto px-6 py-6 flex flex-col">
-        <ChatInterface
-          chatId={chatId}
-          contextData={context?.contextData ?? ""}
-          className="flex-1 rounded-3xl"
-        />
-      </div>
+      )}
+      <ChatInterface
+        chatId={chatId}
+        contextData={context?.contextData ?? ""}
+        botName={botName}
+      />
     </div>
   );
 }

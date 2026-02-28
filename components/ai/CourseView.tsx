@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CourseDeepDive } from "./CourseDeepDive";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, MessageSquare } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { writeSessionJson } from "@/lib/client-storage";
 
 type Course = {
@@ -14,6 +14,8 @@ type Course = {
   code: string;
   term_name: string | null;
   syllabus_html: string | null;
+  current_score?: number | null;
+  current_grade?: string | null;
 };
 
 type Assignment = {
@@ -35,26 +37,28 @@ type ModuleItem = {
   position: number;
 };
 
+type Announcement = {
+  id: number;
+  title: string;
+  posted_at: string | null;
+};
+
 const TABS = ["Course", "AI Insights"] as const;
 type Tab = (typeof TABS)[number];
-
-const SLIDE = {
-  enter: (dir: number) => ({ x: dir * 40, opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: -dir * 40, opacity: 0 }),
-};
 
 export function CourseView({
   course,
   assignments,
   modules,
   moduleItems,
+  announcements = [],
   standardView,
 }: {
   course: Course;
   assignments: Assignment[];
   modules: Module[];
   moduleItems: ModuleItem[];
+  announcements?: Announcement[];
   standardView: React.ReactNode;
 }) {
   const router = useRouter();
@@ -67,9 +71,6 @@ export function CourseView({
     setActiveTab(tab);
   }
 
-  const currentIndex = TABS.indexOf(activeTab);
-  const direction = currentIndex - prevIndex.current;
-
   function handleRefresh() {
     setRefreshKey((k) => k + 1);
   }
@@ -78,7 +79,7 @@ export function CourseView({
     writeSessionJson("chat-context", {
       type: "course",
       title: course.name,
-      contextData: `Course: ${course.name} (${course.code})\nTerm: ${course.term_name}\nAssignments: ${assignments.map((a) => `${a.name} (Due: ${a.due_at}, Points: ${a.points_possible})`).join(", ")}\nModules: ${modules.map((m) => m.name).join(", ")}`,
+      contextData: `Course: ${course.name} (${course.code})\nTerm: ${course.term_name}\nCurrent grade: ${course.current_grade ?? "N/A"} (${course.current_score?.toFixed(1) ?? "N/A"}%)\nAssignments: ${assignments.map((a) => `${a.name} (Due: ${a.due_at})`).join(", ")}\nModules: ${modules.map((m) => m.name).join(", ")}`,
     });
     router.push("/chat");
   }
@@ -124,30 +125,38 @@ export function CourseView({
         )}
       </div>
 
-      <div className="overflow-hidden">
-        <AnimatePresence mode="wait" custom={direction}>
-          <motion.div
-            key={activeTab}
-            custom={direction}
-            variants={SLIDE}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {activeTab === "Course" ? (
-              standardView
-            ) : (
-              <CourseDeepDive
-                course={course}
-                assignments={assignments}
-                modules={modules}
-                moduleItems={moduleItems}
-                refreshKey={refreshKey}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
+      {/* Both panels always mounted — only opacity/translate changes, state persists across tab switches */}
+      <div className="relative">
+        <motion.div
+          animate={{
+            opacity: activeTab === "Course" ? 1 : 0,
+            x: activeTab === "Course" ? 0 : -24,
+            pointerEvents: activeTab === "Course" ? "auto" : "none",
+          }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className={activeTab !== "Course" ? "absolute inset-0" : ""}
+        >
+          {standardView}
+        </motion.div>
+
+        <motion.div
+          animate={{
+            opacity: activeTab === "AI Insights" ? 1 : 0,
+            x: activeTab === "AI Insights" ? 0 : 24,
+            pointerEvents: activeTab === "AI Insights" ? "auto" : "none",
+          }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className={activeTab !== "AI Insights" ? "absolute inset-0" : ""}
+        >
+          <CourseDeepDive
+            course={course}
+            assignments={assignments}
+            modules={modules}
+            moduleItems={moduleItems}
+            announcements={announcements}
+            refreshKey={refreshKey}
+          />
+        </motion.div>
       </div>
     </div>
   );

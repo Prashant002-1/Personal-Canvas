@@ -2,6 +2,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   convertToModelMessages,
   createIdGenerator,
+  generateText,
   stepCountIs,
   streamText,
   type UIMessage,
@@ -61,57 +62,68 @@ function extractTextFromMessage(message: UIMessage): string {
     .join("\n");
 }
 
-function compactMessages({
+async function compactMessages({
   messages,
   existingSummary,
+  summaryCount,
 }: {
   messages: UIMessage[];
   existingSummary: string | null;
-}): { messages: UIMessage[]; summary: string | null; compacted: boolean } {
+  summaryCount: number;
+}): Promise<{ messages: UIMessage[]; summary: string | null; summaryCount: number; compacted: boolean }> {
   if (messages.length <= MAX_MESSAGES_BEFORE_COMPACTION) {
-    return {
-      messages,
-      summary: existingSummary,
-      compacted: false,
-    };
+    return { messages, summary: existingSummary, summaryCount, compacted: false };
   }
 
   const olderMessages = messages.slice(0, -MESSAGES_TO_KEEP_AFTER_COMPACTION);
   const recentMessages = messages.slice(-MESSAGES_TO_KEEP_AFTER_COMPACTION);
 
-  const compactableLines = olderMessages
-    .map((message) => {
-      const role = message.role === "assistant" ? "Assistant" : "User";
-      const text = extractTextFromMessage(message);
-      if (!text) return null;
-      return `- ${role}: ${text.replace(/\s+/g, " ").slice(0, 220)}`;
+  const conversationText = olderMessages
+    .map((m) => {
+      const role = m.role === "assistant" ? "Assistant" : "User";
+      const text = extractTextFromMessage(m);
+      return text ? `${role}: ${text}` : null;
     })
-    .filter((line): line is string => Boolean(line));
-
-  const deltaSummary =
-    compactableLines.length > 0
-      ? compactableLines.slice(-20).join("\n")
-      : "- Prior conversation context retained.";
-
-  const mergedSummary = [existingSummary, "Compacted history", deltaSummary]
     .filter(Boolean)
-    .join("\n\n")
-    .slice(0, 3200);
+    .join("\n\n");
+
+  let newSummary: string;
+  try {
+    const { text } = await generateText({
+      model: openrouter("arcee-ai/trinity-large-preview:free"),
+      messages: [
+        {
+          role: "user" as const,
+          content: `Summarize this conversation between a student and their academic AI assistant. Preserve: courses mentioned, assignments discussed, deadlines named, study strategies, and any personal context. Be concise but complete — this summary will replace the original messages as context.\n\n${existingSummary ? `Prior summary:\n${existingSummary}\n\n` : ""}Messages to summarize:\n${conversationText}`,
+        },
+      ],
+    });
+    newSummary = text.trim();
+  } catch {
+    // Fallback: text-trim if LLM fails
+    const lines = olderMessages
+      .map((m) => {
+        const role = m.role === "assistant" ? "Assistant" : "User";
+        const text = extractTextFromMessage(m);
+        return text ? `- ${role}: ${text.replace(/\s+/g, " ").slice(0, 220)}` : null;
+      })
+      .filter(Boolean) as string[];
+    newSummary = [existingSummary, lines.slice(-20).join("\n")]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 3200);
+  }
 
   const summaryMessage: UIMessage = {
     id: `summary-${Date.now()}`,
     role: "system",
-    parts: [
-      {
-        type: "text",
-        text: `Conversation summary (compressed context):\n${mergedSummary}`,
-      },
-    ],
+    parts: [{ type: "text", text: `Conversation summary (${summaryCount + 1} compaction${summaryCount + 1 > 1 ? "s" : ""}):\n${newSummary}` }],
   };
 
   return {
     messages: [summaryMessage, ...recentMessages],
-    summary: mergedSummary,
+    summary: newSummary,
+    summaryCount: summaryCount + 1,
     compacted: true,
   };
 }
@@ -125,14 +137,20 @@ export async function GET(req: Request) {
   }
 
   const storedSession = await loadChatSession(chatId);
-  const validatedMessages = await validateUIMessages<UIMessage>({
-    messages: storedSession.messages,
-  });
+  const validatedMessages: UIMessage[] =
+    storedSession.messages.length === 0
+      ? []
+      : await validateUIMessages<UIMessage>({
+          messages: storedSession.messages,
+        });
 
   return Response.json({
     chatId,
     context: storedSession.contextData,
     summary: storedSession.summary,
+    summaryCount: storedSession.summaryCount,
+    messageCount: validatedMessages.length,
+    compactionThreshold: MAX_MESSAGES_BEFORE_COMPACTION,
     messages: validatedMessages,
   });
 }
@@ -200,9 +218,10 @@ export async function POST(req: Request) {
       messages: mergedMessages,
     });
 
-    const compacted = compactMessages({
+    const compacted = await compactMessages({
       messages: validatedMessages,
       existingSummary: storedSession.summary,
+      summaryCount: storedSession.summaryCount,
     });
 
     if (compacted.compacted) {
@@ -213,6 +232,7 @@ export async function POST(req: Request) {
           details: {
             originalMessageCount: validatedMessages.length,
             compactedMessageCount: compacted.messages.length,
+            summaryCount: compacted.summaryCount,
           },
         },
       ]);
@@ -253,6 +273,7 @@ Reactive planner snapshot:
           chatId,
           contextData: context,
           summary: compacted.summary,
+          summaryCount: compacted.summaryCount,
           messages: finalMessages,
         });
 

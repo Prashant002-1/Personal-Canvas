@@ -3,11 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, User, Sparkles } from "lucide-react";
+import { Bot, Send, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithToolCalls,
@@ -36,17 +35,68 @@ function extractMessageText(message: UIMessage): string {
     .join("\n");
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  getDashboardSnapshot: "Dashboard",
+  getCourseOverview: "Course overview",
+  getCourseTimeline: "Timeline",
+  getCourseResources: "Resources",
+  getSubmissionInsights: "Submissions",
+  searchAssignments: "Searching",
+  getTodayPlanSnapshot: "Today's plan",
+  saveMemory: "Saving to memory",
+  searchMemories: "Recalling memory",
+  getPlannerEvents: "Planner events",
+};
+
+const MEMORY_TOOLS = new Set(["saveMemory", "searchMemories"]);
+
+function ToolPill({ part }: { part: ToolOutputPart }) {
+  const toolName = part.type.replace(/^tool-/, "");
+  const label = TOOL_LABELS[toolName] ?? toolName;
+  const isMemory = MEMORY_TOOLS.has(toolName);
+  const isPending = part.state === "input-streaming" || part.state === "input-available";
+  const isError = part.state === "output-error";
+
+  const output = !isPending && !isError && isRecord(part.output) ? part.output : null;
+  const summary = output && typeof output.summary === "string" ? output.summary : null;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border ${
+      isMemory
+        ? "bg-amber-500/5 border-amber-500/20 text-amber-600 dark:text-amber-400"
+        : "bg-muted/60 border-border/50 text-muted-foreground"
+    }`}>
+      {isPending ? (
+        <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin inline-block" />
+      ) : isError ? (
+        <span className="text-red-500">!</span>
+      ) : (
+        <span className="opacity-60">✓</span>
+      )}
+      {summary ?? label}
+    </span>
+  );
+}
+
+type SessionMeta = {
+  messageCount: number;
+  summaryCount: number;
+  compactionThreshold: number;
+  summary: string | null;
+};
+
 export function ChatInterface({
   chatId,
   contextData,
-  className,
+  botName,
 }: {
   chatId: string;
   contextData: string;
-  className?: string;
+  botName?: string | null;
 }) {
   const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [sessionMeta, setSessionMeta] = useState<SessionMeta | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const { messages, sendMessage, status, error, setMessages } = useChat({
     id: chatId,
     transport: new DefaultChatTransport({
@@ -65,145 +115,208 @@ export function ChatInterface({
   const isLoading = status === "submitted" || status === "streaming";
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, status]);
 
+  async function fetchSession(ignoreSignal?: { current: boolean }) {
+    const res = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`);
+    if (!res.ok) return;
+    const data: { messages?: UIMessage[]; messageCount?: number; summaryCount?: number; compactionThreshold?: number; summary?: string | null } = await res.json();
+    if (ignoreSignal?.current) return;
+    if (Array.isArray(data.messages)) setMessages(data.messages);
+    setSessionMeta({
+      messageCount: data.messageCount ?? 0,
+      summaryCount: data.summaryCount ?? 0,
+      compactionThreshold: data.compactionThreshold ?? 30,
+      summary: data.summary ?? null,
+    });
+  }
+
   useEffect(() => {
-    let ignore = false;
+    const signal = { current: false };
+    fetchSession(signal);
+    return () => { signal.current = true; };
+  }, [chatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    async function loadHistory() {
-      const res = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`);
-      if (!res.ok) return;
-
-      const data: { messages?: UIMessage[] } = await res.json();
-      if (!ignore && Array.isArray(data.messages)) {
-        setMessages(data.messages);
-      }
+  // Refresh session meta after each AI response completes
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    if (prevStatus.current !== "ready" && status === "ready") {
+      fetchSession();
     }
-
-    loadHistory();
-
-    return () => {
-      ignore = true;
-    };
-  }, [chatId, setMessages]);
+    prevStatus.current = status;
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
     if (!text || isLoading) return;
-
     await sendMessage({ text });
     setInput("");
   }
 
+  const visibleMessages = messages.filter((m) => m.role !== "system");
+  const hasSummary = sessionMeta && sessionMeta.summaryCount > 0;
+  const messagesUntilCompaction = sessionMeta
+    ? Math.max(0, sessionMeta.compactionThreshold - sessionMeta.messageCount)
+    : null;
+
   return (
-    <div className={`flex flex-col border rounded-3xl bg-card shadow-sm overflow-hidden ${className ?? "h-[500px]"}`}>
-      <div className="p-4 border-b bg-muted/30 flex items-center gap-2">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <h3 className="font-semibold">AI Assistant</h3>
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
+      {/* Messages */}
+      <div className="flex-1 pb-28">
+        {visibleMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[60vh] text-center px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-5 mx-auto">
+                <Sparkles className="w-6 h-6 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">{botName ? `Hey, I'm ${botName}` : "AI Assistant"}</h2>
+              <p className="text-muted-foreground max-w-xs leading-relaxed">
+                Ask about deadlines, get study strategies, or talk through your coursework.
+              </p>
+            </motion.div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+            {/* Compaction divider — shown when prior context was summarized */}
+            {hasSummary && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center gap-3 py-1"
+              >
+                <div className="flex-1 h-px bg-border/50" />
+                <span className="text-xs text-muted-foreground/60 px-2 flex items-center gap-1.5 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 inline-block" />
+                  Context summarized {sessionMeta.summaryCount > 1 ? `(${sessionMeta.summaryCount}x)` : ""}
+                </span>
+                <div className="flex-1 h-px bg-border/50" />
+              </motion.div>
+            )}
+
+            <AnimatePresence initial={false}>
+              {visibleMessages.map((m) => {
+                const text = extractMessageText(m);
+                const toolParts = m.parts.filter(isToolOutputPart);
+                const isUser = m.role === "user";
+
+                return (
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}
+                  >
+                    {!isUser && (
+                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                        <Bot className="w-3.5 h-3.5 text-foreground/60" />
+                      </div>
+                    )}
+
+                    <div className={`flex flex-col gap-2 max-w-[80%] ${isUser ? "items-end" : "items-start"}`}>
+                      {toolParts.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {toolParts.map((part) => (
+                            <ToolPill key={part.toolCallId} part={part} />
+                          ))}
+                        </div>
+                      )}
+
+                      {text && (
+                        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                          isUser
+                            ? "bg-primary text-primary-foreground rounded-tr-sm"
+                            : "bg-muted/50 text-foreground rounded-tl-sm"
+                        }`}>
+                          {isUser ? (
+                            <span>{text}</span>
+                          ) : (
+                            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-1">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-3"
+              >
+                <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                  <Bot className="w-3.5 h-3.5 text-foreground/60" />
+                </div>
+                <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-muted/50 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-foreground/30 rounded-full animate-bounce" />
+                  <span className="w-1.5 h-1.5 bg-foreground/30 rounded-full animate-bounce [animation-delay:0.15s]" />
+                  <span className="w-1.5 h-1.5 bg-foreground/30 rounded-full animate-bounce [animation-delay:0.3s]" />
+                </div>
+              </motion.div>
+            )}
+
+            {error && (
+              <div className="max-w-lg rounded-xl bg-red-500/5 border border-red-300/30 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                {error.message}
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </div>
+        )}
       </div>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center text-muted-foreground py-8">
-              <Bot className="w-8 h-8 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">Ask about coursework, deadlines, or planning.</p>
+      {/* Sticky input bar */}
+      <div className="fixed bottom-0 left-0 right-0 border-t bg-background/80 backdrop-blur-md px-6 pt-3 pb-4">
+        {sessionMeta && visibleMessages.length > 0 && (
+          <div className="max-w-3xl mx-auto flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
+              <span>{sessionMeta.messageCount} messages</span>
+              {messagesUntilCompaction !== null && messagesUntilCompaction <= 10 && (
+                <>
+                  <span>·</span>
+                  <span className="text-amber-500/70">summarizes in {messagesUntilCompaction}</span>
+                </>
+              )}
+              {sessionMeta.summaryCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60 inline-block" />
+                    summarized {sessionMeta.summaryCount}x
+                  </span>
+                </>
+              )}
             </div>
-          )}
-
-          {messages.map((m) => {
-            const text = extractMessageText(m);
-            const toolParts = m.parts.filter(isToolOutputPart);
-
-            return (
-            <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                {m.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-              </div>
-              <div className={`px-4 py-3 rounded-2xl max-w-[80%] ${m.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted/50 rounded-tl-sm"}`}>
-                {text && (
-                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
-                  </div>
-                )}
-
-                {m.role === "assistant" && toolParts.length > 0 && (
-                  <div className={`space-y-2 ${text ? "mt-3" : ""}`}>
-                    {toolParts.map((part) => {
-                      if (part.state === "output-error") {
-                        return (
-                          <div key={part.toolCallId} className="rounded-lg border border-red-300/40 bg-red-500/5 p-2 text-xs">
-                            Tool error: {part.errorText ?? "Unknown error"}
-                          </div>
-                        );
-                      }
-
-                      if (part.state === "output-available") {
-                        const output = part.output;
-                        const summary =
-                          isRecord(output) && typeof output.summary === "string"
-                            ? output.summary
-                            : null;
-                        const uiTarget =
-                          isRecord(output) && typeof output.uiTarget === "string"
-                            ? output.uiTarget
-                            : null;
-
-                        return (
-                          <div key={part.toolCallId} className="rounded-lg border bg-background/70 p-2 text-xs">
-                            <p className="font-medium">
-                              {summary ?? (uiTarget ? "Data loaded for this request." : "Analysis updated.")}
-                            </p>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={part.toolCallId} className="rounded-lg border bg-background/50 p-2 text-xs text-muted-foreground">
-                          Processing your request...
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )})}
-
-          {isLoading && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div className="px-4 py-3 rounded-2xl bg-muted/50 rounded-tl-sm flex items-center gap-1">
-                <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0.4s]" />
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-xl border border-red-300/40 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">
-              {error.message}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      <div className="p-4 border-t bg-background">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
+          </div>
+        )}
+        <form
+          onSubmit={handleSubmit}
+          className="max-w-3xl mx-auto flex items-center gap-3"
+        >
+          <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
-            className="rounded-full bg-muted/50 border-transparent focus-visible:bg-background"
+            placeholder="Ask anything..."
+            className="flex-1 bg-muted rounded-2xl px-4 py-3 text-sm border-0 outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground/60 transition-shadow"
           />
-          <Button type="submit" size="icon" className="rounded-full shrink-0" disabled={isLoading || !input.trim()}>
+          <Button
+            type="submit"
+            size="icon"
+            className="rounded-xl h-11 w-11 shrink-0"
+            disabled={isLoading || !input.trim()}
+          >
             <Send className="w-4 h-4" />
           </Button>
         </form>

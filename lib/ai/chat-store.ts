@@ -15,6 +15,7 @@ export type ChatSessionRecord = {
   contextData: string | null;
   messages: UIMessage[];
   summary: string | null;
+  summaryCount: number;
 };
 
 type TranscriptEntry =
@@ -79,6 +80,10 @@ async function ensureChatTables(): Promise<void> {
 
       await query(
         "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary TEXT"
+      );
+
+      await query(
+        "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary_count INTEGER NOT NULL DEFAULT 0"
       );
 
       await query(`
@@ -156,14 +161,14 @@ export async function loadChatSession(chatId: string): Promise<ChatSessionRecord
   await ensureChatTables();
 
   const existing = await query(
-    "SELECT id, context_data, summary, messages FROM chat_sessions WHERE id = $1",
+    "SELECT id, context_data, summary, summary_count, messages FROM chat_sessions WHERE id = $1",
     [chatId]
   );
 
   if (existing.rowCount === 0) {
     await query(
-      `INSERT INTO chat_sessions (id, context_data, summary, messages)
-       VALUES ($1, NULL, NULL, '[]'::jsonb)`,
+      `INSERT INTO chat_sessions (id, context_data, summary, summary_count, messages)
+       VALUES ($1, NULL, NULL, 0, '[]'::jsonb)`,
       [chatId]
     );
 
@@ -171,6 +176,7 @@ export async function loadChatSession(chatId: string): Promise<ChatSessionRecord
       id: chatId,
       contextData: null,
       summary: null,
+      summaryCount: 0,
       messages: [],
     };
   }
@@ -179,6 +185,7 @@ export async function loadChatSession(chatId: string): Promise<ChatSessionRecord
     id: string;
     context_data: string | null;
     summary: string | null;
+    summary_count: number;
     messages: unknown;
   };
 
@@ -186,6 +193,7 @@ export async function loadChatSession(chatId: string): Promise<ChatSessionRecord
     id: row.id,
     contextData: row.context_data,
     summary: row.summary,
+    summaryCount: row.summary_count ?? 0,
     messages: Array.isArray(row.messages) ? (row.messages as UIMessage[]) : [],
   };
 }
@@ -195,23 +203,26 @@ export async function saveChatSession({
   messages,
   contextData,
   summary,
+  summaryCount,
 }: {
   chatId: string;
   messages: UIMessage[];
   contextData?: string | null;
   summary?: string | null;
+  summaryCount?: number;
 }): Promise<void> {
   await ensureChatTables();
 
   await query(
-    `INSERT INTO chat_sessions (id, context_data, summary, messages, updated_at)
-     VALUES ($1, $2, $3, $4::jsonb, NOW())
+    `INSERT INTO chat_sessions (id, context_data, summary, summary_count, messages, updated_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
      ON CONFLICT (id) DO UPDATE SET
        context_data = COALESCE(EXCLUDED.context_data, chat_sessions.context_data),
        summary = COALESCE(EXCLUDED.summary, chat_sessions.summary),
+       summary_count = GREATEST(EXCLUDED.summary_count, chat_sessions.summary_count),
        messages = EXCLUDED.messages,
        updated_at = NOW()`,
-    [chatId, contextData ?? null, summary ?? null, JSON.stringify(messages)]
+    [chatId, contextData ?? null, summary ?? null, summaryCount ?? 0, JSON.stringify(messages)]
   );
 }
 
