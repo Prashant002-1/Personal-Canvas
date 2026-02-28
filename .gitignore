@@ -65,6 +65,7 @@ Desktop.ini
 # Markdown
 *.md
 !docs/**/*.md
+.chats/
 .claude/
 .cursor/
 .gemini/
@@ -75,3 +76,5 @@ tessl.json
 .worktrees/
 
 !README.md
+
+Seed.sql
