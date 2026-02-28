@@ -223,7 +223,7 @@ export async function POST(req: Request) {
     });
 
     const result = streamText({
-      model: openrouter("openai/gpt-4o-mini"),
+      model: openrouter("arcee-ai/trinity-large-preview:free"),
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(8),

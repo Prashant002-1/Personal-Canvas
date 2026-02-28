@@ -25,15 +25,15 @@ type RequestBody = {
 };
 
 const dashboardSchema = z.object({
-  briefing: z.string().describe("A 2-3 sentence encouraging daily briefing for the student"),
+  briefing: z.string().describe("2 sentences max. State the student's most urgent situation and one concrete next action. No markdown."),
   priorities: z.array(z.object({
-    title: z.string(),
-    description: z.string(),
+    title: z.string().describe("5 words max"),
+    description: z.string().describe("20 words max. One specific action, not general advice."),
     urgency: z.enum(["high", "medium", "low"]),
-    course: z.string(),
-  })).describe("Top 3 priorities for today"),
-  insight: z.string().describe("A strategic insight about the upcoming workload"),
-  workloadWarning: z.string().optional().describe("A warning if a cluster of deadlines is approaching"),
+    course: z.string().describe("Course code only, e.g. CS430"),
+  })).describe("Exactly 3 priorities ordered by urgency. High = due within 3 days. Medium = due within 7 days. Low = everything else."),
+  insight: z.string().describe("1-2 sentences. A specific tactical observation about workload patterns or scheduling. Not generic advice."),
+  workloadWarning: z.string().optional().describe("Only include when 2+ high-urgency items cluster within 5 days. 1 sentence. Omit otherwise."),
 });
 
 export async function POST(req: Request) {
@@ -49,7 +49,7 @@ Courses: ${courses.map((course) => `${course.name} (${course.code})`).join(", ")
 Upcoming Assignments:
 ${upcomingAssignments.map((assignment) => `- ${assignment.name} in ${assignment.course_code} (Due: ${assignment.due_at ? new Date(assignment.due_at).toLocaleDateString() : "No due date"})`).join("\n")}
 
-Provide a helpful, personalized analysis. Be specific, not generic.`,
+Provide a helpful, personalized analysis. Be specific, not generic. Return plain text only — no markdown formatting, no asterisks, no bullet symbols, no headers.`,
   });
 
   return Response.json(object);

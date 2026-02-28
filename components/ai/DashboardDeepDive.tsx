@@ -95,15 +95,13 @@ export function DashboardDeepDive({
 
   return (
     <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-12 space-y-6">
-      <div className="flex items-center gap-2 text-primary font-medium">
-        <Sparkles className="w-5 h-5" />
-        <span>AI Daily Briefing</span>
-      </div>
-
       {data.briefing && (
-        <div className="bg-card border rounded-3xl p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-          <p className="relative z-10 text-base leading-relaxed text-foreground/90">{data.briefing}</p>
+        <div className="bg-card border rounded-2xl p-5 shadow-sm flex gap-3">
+          <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-semibold mb-1">Daily Briefing</h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">{data.briefing}</p>
+          </div>
         </div>
       )}
 
@@ -130,7 +128,7 @@ export function DashboardDeepDive({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${data.workloadWarning ? "md:grid-cols-2" : ""}`}>
         {data.insight && (
           <div className="bg-card border rounded-2xl p-5 shadow-sm flex gap-3">
             <Lightbulb className="w-5 h-5 text-primary shrink-0 mt-0.5" />

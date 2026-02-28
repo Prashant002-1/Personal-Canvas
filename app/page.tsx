@@ -1,6 +1,6 @@
 import { query } from "@/lib/db";
 import Link from "next/link";
-import { Calendar, BookOpen, Clock, ChevronRight, LayoutDashboard, Sparkles } from "lucide-react";
+import { Calendar, BookOpen, Clock, ChevronRight, LayoutDashboard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DashboardView } from "@/components/ai/DashboardView";
@@ -170,13 +170,6 @@ export default async function Home() {
                     ))}
                   </div>
                 )}
-                
-                <div className="p-4 bg-muted/30 border-t">
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span>AI Study Plans available in courses</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

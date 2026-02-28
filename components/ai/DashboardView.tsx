@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardDeepDive } from "./DashboardDeepDive";
 import { Button } from "@/components/ui/button";
-import { Sparkles, RotateCcw, MessageSquare } from "lucide-react";
+import { RotateCcw, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { readLocalJson, writeSessionJson } from "@/lib/client-storage";
+import { writeSessionJson } from "@/lib/client-storage";
 
 type Course = {
   name: string;
@@ -19,6 +19,15 @@ type UpcomingAssignment = {
   course_code: string;
 };
 
+const TABS = ["Overview", "Study Plan"] as const;
+type Tab = (typeof TABS)[number];
+
+const SLIDE = {
+  enter: (dir: number) => ({ x: dir * 40, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir: number) => ({ x: -dir * 40, opacity: 0 }),
+};
+
 export function DashboardView({
   courses,
   upcomingAssignments,
@@ -29,18 +38,17 @@ export function DashboardView({
   standardView: React.ReactNode;
 }) {
   const router = useRouter();
-  const [insightsVisible, setInsightsVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [refreshKey, setRefreshKey] = useState(0);
+  const prevIndex = useRef(0);
 
-  useEffect(() => {
-    if (readLocalJson("dashboard-insights")) {
-      setInsightsVisible(true);
-    }
-  }, []);
-
-  function handleGenerate() {
-    setInsightsVisible(true);
+  function handleTabChange(tab: Tab) {
+    prevIndex.current = TABS.indexOf(activeTab);
+    setActiveTab(tab);
   }
+
+  const currentIndex = TABS.indexOf(activeTab);
+  const direction = currentIndex - prevIndex.current;
 
   function handleRefresh() {
     setRefreshKey((k) => k + 1);
@@ -57,46 +65,68 @@ export function DashboardView({
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-end gap-2">
-        {insightsVisible && (
-          <>
+      <div className="flex items-center justify-between">
+        <div className="relative flex items-center bg-muted rounded-xl p-1 gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => handleTabChange(tab)}
+              className="relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors z-10 focus-visible:outline-none"
+              style={{ color: activeTab === tab ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))" }}
+            >
+              {activeTab === tab && (
+                <motion.span
+                  layoutId="tab-bg"
+                  className="absolute inset-0 bg-background shadow-sm rounded-lg"
+                  transition={{ type: "spring", damping: 30, stiffness: 350 }}
+                />
+              )}
+              <span className="relative z-10">{tab}</span>
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "Study Plan" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-2"
+          >
             <Button variant="ghost" size="sm" onClick={handleChat} className="gap-2 text-muted-foreground hover:text-foreground">
               <MessageSquare className="w-4 h-4" />
-              Chat with AI
+              Chat
             </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
               <RotateCcw className="w-4 h-4" />
               Refresh
             </Button>
-          </>
-        )}
-        {!insightsVisible && (
-          <Button size="sm" onClick={handleGenerate} className="gap-2">
-            <Sparkles className="w-4 h-4" />
-            Generate AI Insights
-          </Button>
+          </motion.div>
         )}
       </div>
 
-      <AnimatePresence>
-        {insightsVisible && (
+      <div className="overflow-hidden">
+        <AnimatePresence mode="wait" custom={direction}>
           <motion.div
-            key="ai-insights"
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.3 }}
+            key={activeTab}
+            custom={direction}
+            variants={SLIDE}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           >
-            <DashboardDeepDive
-              courses={courses}
-              upcomingAssignments={upcomingAssignments}
-              refreshKey={refreshKey}
-            />
+            {activeTab === "Overview" ? (
+              standardView
+            ) : (
+              <DashboardDeepDive
+                courses={courses}
+                upcomingAssignments={upcomingAssignments}
+                refreshKey={refreshKey}
+              />
+            )}
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {standardView}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

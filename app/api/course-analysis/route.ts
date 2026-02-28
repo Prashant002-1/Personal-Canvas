@@ -74,7 +74,7 @@ Assignments: ${assignments.map((assignment) => `${assignment.name} (Due: ${assig
 
 Modules: ${modules.map((module) => `${module.name} (${moduleItems.filter((item) => item.module_id === module.id).length} items)`).join("; ")}
 
-Be specific and actionable. Do not repeat raw data back.`,
+Be specific and actionable. Do not repeat raw data back. Return plain text only — no markdown formatting, no asterisks, no bullet symbols, no headers.`,
   });
 
   return Response.json(object);

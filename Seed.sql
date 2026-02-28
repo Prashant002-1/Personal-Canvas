@@ -102,3 +102,196 @@ INSERT INTO module_items (id, module_id, course_id, title, type, position) VALUE
 (40003, 4002, 4, 'Next.js App Router Docs', 'ExternalUrl', 1),
 (40004, 4002, 4, 'Next.js Routing', 'Assignment', 2)
 ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- USERS
+-- ==========================================
+INSERT INTO users (id, name, sortable_name, short_name, login_id, pronouns) VALUES
+(1, 'Alice Johnson', 'Johnson, Alice', 'Alice', 'alice.j', 'she/her')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- COURSE ENROLLMENTS
+-- ==========================================
+INSERT INTO course_enrollments (id, course_id, user_id, role, enrollment_state, current_score, current_grade, last_activity_at) VALUES
+(1, 1, 1, 'student', 'active', 88.5, 'B+', '2026-02-18T09:15:00Z'),
+(2, 2, 1, 'student', 'active', 92.0, 'A-', '2026-02-18T09:15:00Z'),
+(3, 3, 1, 'student', 'active', 85.0, 'B', '2026-02-18T09:15:00Z'),
+(4, 4, 1, 'student', 'active', 90.0, 'A-', '2026-02-18T09:15:00Z')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- ASSIGNMENT GROUPS
+-- ==========================================
+-- Applied Statistics
+INSERT INTO assignment_groups (id, course_id, name, group_weight, position, rules) VALUES
+(1, 1, 'Quizzes', 10, 1, '{"drop_lowest":1}'),
+(2, 1, 'Homework', 20, 2, '{"drop_lowest":0}'),
+(3, 1, 'Midterm', 30, 3, '{}'),
+(4, 1, 'Final Project', 40, 4, '{}'),
+-- Advanced Machine Learning
+(5, 2, 'Assignments', 40, 1, '{}'),
+(6, 2, 'Midterm Project', 20, 2, '{}'),
+(7, 2, 'Final Presentation', 40, 3, '{}'),
+-- Mobile Application Development
+(8, 3, 'Labs', 30, 1, '{}'),
+(9, 3, 'Midterm App', 30, 2, '{}'),
+(10, 3, 'Final App', 40, 3, '{}'),
+-- Full Stack Web Development
+(11, 4, 'Component Assignments', 20, 1, '{}'),
+(12, 4, 'Routing & State Labs', 30, 2, '{}'),
+(13, 4, 'Database Project', 20, 3, '{}'),
+(14, 4, 'Capstone Deployment', 30, 4, '{}')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- SUBMISSIONS
+-- ==========================================
+-- Alice's submissions (assignment_id references core assignments)
+INSERT INTO submissions (assignment_id, course_id, user_id, submitted_at, graded_at, score, grade, entered_score, entered_grade, late, missing, workflow_state, submission_type, seconds_late) VALUES
+-- Applied Statistics
+(101,1,1,'2026-01-24T10:00:00Z','2026-01-25T12:00:00Z',18.5,'A',18.5,'A',false,false,'graded','online_text',0),
+(102,1,1,'2026-02-10T15:30:00Z','2026-02-11T10:00:00Z',45.0,'A-',45.0,'A-',false,false,'graded','online_upload',0),
+(103,1,1,'2026-03-06T09:00:00Z','2026-03-07T14:00:00Z',78.0,'C+',78.0,'C+',true,false,'graded','online_text',86400),
+(104,1,1,'2026-04-15T14:45:00Z','2026-04-16T12:00:00Z',88.0,'B+',88.0,'B+',false,false,'graded','online_upload',0),
+(105,1,1,NULL,NULL,0,'F',0,'F',false,true,'unsubmitted',NULL,NULL),
+
+-- Advanced Machine Learning
+(201,2,1,'2026-01-30T11:00:00Z','2026-01-31T12:00:00Z',48.0,'A-',48.0,'A-',false,false,'graded','online_text',0),
+(202,2,1,'2026-02-20T14:00:00Z','2026-02-21T09:00:00Z',70.0,'B+',70.0,'B+',false,false,'graded','online_upload',0),
+(203,2,1,'2026-03-25T16:00:00Z','2026-03-26T10:00:00Z',95.0,'A',95.0,'A',false,false,'graded','online_text',0),
+(204,2,1,'2026-04-20T12:00:00Z','2026-04-21T09:00:00Z',72.0,'B',72.0,'B',false,false,'graded','online_upload',0),
+(205,2,1,'2026-05-08T16:00:00Z','2026-05-09T12:00:00Z',90.0,'A-',90.0,'A-',false,false,'graded','online_text',0),
+
+-- Mobile Application Development
+(301,3,1,'2026-01-15T10:00:00Z','2026-01-16T09:00:00Z',10.0,'A',10.0,'A',false,false,'graded','online_upload',0),
+(302,3,1,'2026-02-05T14:30:00Z','2026-02-06T12:00:00Z',48.0,'A-',48.0,'A-',false,false,'graded','online_upload',0),
+(303,3,1,'2026-03-10T11:00:00Z','2026-03-11T09:00:00Z',70.0,'B+',70.0,'B+',false,false,'graded','online_upload',0),
+(304,3,1,'2026-04-05T15:00:00Z','2026-04-06T10:00:00Z',85.0,'B+',85.0,'B+',false,false,'graded','online_upload',0),
+(305,3,1,'2026-05-12T12:00:00Z','2026-05-13T09:00:00Z',190.0,'A-',190.0,'A-',false,false,'graded','online_upload',0),
+
+-- Full Stack Web Development
+(401,4,1,'2026-01-28T10:00:00Z','2026-01-29T11:00:00Z',48.0,'A-',48.0,'A-',false,false,'graded','online_upload',0),
+(402,4,1,'2026-02-18T15:00:00Z','2026-02-19T10:00:00Z',48.0,'A-',48.0,'A-',false,false,'graded','online_upload',0),
+(403,4,1,'2026-03-15T11:00:00Z','2026-03-16T09:00:00Z',70.0,'B+',70.0,'B+',false,false,'graded','online_upload',0),
+(404,4,1,'2026-04-10T14:00:00Z','2026-04-11T10:00:00Z',95.0,'A',95.0,'A',false,false,'graded','online_upload',0),
+(405,4,1,'2026-05-14T12:00:00Z','2026-05-15T09:00:00Z',140.0,'A-',140.0,'A-',false,false,'graded','online_upload',0)
+ON CONFLICT (assignment_id, user_id) DO NOTHING;
+
+-- ==========================================
+-- ANNOUNCEMENTS
+-- ==========================================
+INSERT INTO announcements (id, course_id, author_id, title, message_html, posted_at, published, read_state) VALUES
+-- Applied Statistics
+(1,1,1,'Welcome to Applied Statistics!','<p>Welcome to STAT401. The syllabus and first assignments are now available.</p>','2026-01-09T08:00:00Z',true,'unread'),
+(2,1,1,'Midterm Exam Date','<p>The midterm exam will be held on March 5th, 2026. Make sure to review chapters 1-5.</p>','2026-02-20T10:00:00Z',true,'unread'),
+-- Advanced Machine Learning
+(3,2,1,'Course Start','<p>Welcome to DS450. Assignments and project details are available.</p>','2026-01-10T08:00:00Z',true,'unread'),
+(4,2,1,'RAG Implementation Reminder','<p>Submit your RAG system implementation by March 25th.</p>','2026-03-10T09:00:00Z',true,'unread'),
+-- Mobile Application Development
+(5,3,1,'Welcome to CS430','<p>Welcome to Mobile App Development. Labs are available.</p>','2026-01-10T08:00:00Z',true,'unread'),
+-- Full Stack Web Development
+(6,4,1,'Welcome to CS460','<p>Welcome to Full Stack Web Development. Syllabus and labs are now live.</p>','2026-01-10T08:00:00Z',true,'unread')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- PAGES
+-- ==========================================
+INSERT INTO pages (course_id, url, title, body_html, front_page, published, last_edited_by_id, updated_at_canvas) VALUES
+(1,'syllabus','Course Syllabus','<h1>STAT401 Syllabus</h1><p>All course policies, grading, and weekly schedule are listed here.</p>',true,true,1,'2026-01-10T08:00:00Z'),
+(2,'syllabus','Course Syllabus','<h1>DS450 Syllabus</h1><p>All course policies, grading, and project schedule are listed here.</p>',true,true,1,'2026-01-10T08:00:00Z'),
+(3,'syllabus','Course Syllabus','<h1>CS430 Syllabus</h1><p>All labs, midterm, and final submission details are listed here.</p>',true,true,1,'2026-01-10T08:00:00Z'),
+(4,'syllabus','Course Syllabus','<h1>CS460 Syllabus</h1><p>All component and deployment policies are listed here.</p>',true,true,1,'2026-01-10T08:00:00Z')
+ON CONFLICT (course_id, url) DO NOTHING;
+
+-- ==========================================
+-- FILES
+-- ==========================================
+INSERT INTO files (id, course_id, display_name, filename, content_type, size_bytes, url, folder_id, hidden, created_at_canvas, updated_at_canvas) VALUES
+(1,1,'STAT401 Syllabus PDF','syllabus.pdf','application/pdf',25000,'https://example.com/files/syllabus.pdf',NULL,false,'2026-01-10T08:00:00Z','2026-01-10T08:00:00Z'),
+(2,2,'DS450 Syllabus PDF','syllabus.pdf','application/pdf',25000,'https://example.com/files/ds450_syllabus.pdf',NULL,false,'2026-01-10T08:00:00Z','2026-01-10T08:00:00Z'),
+(3,3,'CS430 Syllabus PDF','syllabus.pdf','application/pdf',25000,'https://example.com/files/cs430_syllabus.pdf',NULL,false,'2026-01-10T08:00:00Z','2026-01-10T08:00:00Z'),
+(4,4,'CS460 Syllabus PDF','syllabus.pdf','application/pdf',25000,'https://example.com/files/cs460_syllabus.pdf',NULL,false,'2026-01-10T08:00:00Z','2026-01-10T08:00:00Z')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- CALENDAR EVENTS
+-- ==========================================
+INSERT INTO calendar_events (id, course_id, assignment_id, title, description, start_at, end_at, all_day, workflow_state, html_url) VALUES
+-- Applied Statistics
+(1,1,103,'Midterm Exam','Midterm exam for STAT401 covering chapters 1-5.','2026-03-05T15:00:00Z','2026-03-05T17:00:00Z',false,'active','https://example.com/calendar/midterm'),
+(2,1,104,'Linear Regression Project Due','Deadline for submitting Linear Regression Project.','2026-04-15T23:59:59Z','2026-04-15T23:59:59Z',true,'active','https://example.com/calendar/lrproject'),
+-- Advanced Machine Learning
+(3,2,203,'RAG System Due','Submit RAG system implementation.','2026-03-25T23:59:59Z','2026-03-25T23:59:59Z',true,'active','https://example.com/calendar/ragproject'),
+-- Mobile Application Development
+(4,3,305,'Final App Submission','Submit the final APK and source code.','2026-05-12T23:59:59Z','2026-05-12T23:59:59Z',true,'active','https://example.com/calendar/finalapp'),
+-- Full Stack Web Development
+(5,4,405,'Capstone Deployment','Deploy the final project using Vercel.','2026-05-14T23:59:59Z','2026-05-14T23:59:59Z',true,'active','https://example.com/calendar/capstone')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- COURSE GRADE SNAPSHOTS
+-- ==========================================
+INSERT INTO course_grade_snapshots (id, course_id, user_id, captured_at, current_score, current_grade, final_score, final_grade, source) VALUES
+-- Applied Statistics
+(1,1,1,'2026-02-01T12:00:00Z',82.0,'B-',NULL,NULL,'system'),
+(2,1,1,'2026-03-01T12:00:00Z',85.0,'B',NULL,NULL,'system'),
+(3,1,1,'2026-04-15T12:00:00Z',88.5,'B+',NULL,NULL,'system'),
+-- Advanced Machine Learning
+(4,2,1,'2026-02-01T12:00:00Z',90.0,'A-',NULL,NULL,'system'),
+(5,2,1,'2026-03-01T12:00:00Z',91.5,'A-',NULL,NULL,'system'),
+(6,2,1,'2026-04-15T12:00:00Z',92.0,'A-',NULL,NULL,'system'),
+-- Mobile Application Development
+(7,3,1,'2026-02-01T12:00:00Z',82.0,'B',NULL,NULL,'system'),
+(8,3,1,'2026-03-01T12:00:00Z',84.0,'B+',NULL,NULL,'system'),
+(9,3,1,'2026-04-15T12:00:00Z',85.0,'B+',NULL,NULL,'system'),
+-- Full Stack Web Development
+(10,4,1,'2026-02-01T12:00:00Z',88.0,'B+',NULL,NULL,'system'),
+(11,4,1,'2026-03-01T12:00:00Z',89.0,'B+',NULL,NULL,'system'),
+(12,4,1,'2026-04-15T12:00:00Z',90.0,'A-',NULL,NULL,'system')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- QUIZZES
+-- ==========================================
+INSERT INTO quizzes 
+(id, course_id, assignment_id, title, description, quiz_type, scoring_policy, due_at, unlock_at, lock_at, time_limit, allowed_attempts, points_possible, published, html_url) VALUES
+
+-- Applied Statistics (STAT401)
+(1, 1, 101, 'Probability Foundations Quiz', 'Covers basic probability rules, conditional probability, and independence.', 'graded', 'keep_highest', '2026-01-25T23:59:59Z', '2026-01-20T00:00:00Z', '2026-01-25T23:59:59Z', 30, 1, 20, true, 'https://example.com/quizzes/probability'),
+(2, 1, 102, 'Random Variables Quiz', 'Test on discrete and continuous random variables, expectation, and variance.', 'graded', 'keep_highest', '2026-02-10T23:59:59Z', '2026-02-05T00:00:00Z', '2026-02-10T23:59:59Z', 45, 1, 50, true, 'https://example.com/quizzes/randomvariables'),
+
+-- Advanced Machine Learning (DS450)
+(3, 2, 201, 'Feature Visualization Quiz', 'Test understanding of feature visualization techniques.', 'graded', 'keep_highest', '2026-01-30T23:59:59Z', '2026-01-25T00:00:00Z', '2026-01-30T23:59:59Z', 40, 1, 50, true, 'https://example.com/quizzes/featurevisualization'),
+(4, 2, 202, 'Classification Benchmark Quiz', 'Quiz on SVM, Random Forest, and KNN concepts.', 'graded', 'keep_highest', '2026-02-20T23:59:59Z', '2026-02-15T00:00:00Z', '2026-02-20T23:59:59Z', 45, 1, 75, true, 'https://example.com/quizzes/classification'),
+(5, 2, 203, 'RAG Implementation Quiz', 'Questions on building a simple RAG pipeline.', 'graded', 'keep_highest', '2026-03-25T23:59:59Z', '2026-03-20T00:00:00Z', '2026-03-25T23:59:59Z', 60, 1, 100, true, 'https://example.com/quizzes/ragsystem'),
+
+-- Mobile Application Development (CS430)
+(6, 3, 301, 'Android Studio Setup Quiz', 'Check basic IDE setup knowledge.', 'graded', 'keep_highest', '2026-01-15T23:59:59Z', '2026-01-10T00:00:00Z', '2026-01-15T23:59:59Z', 15, 1, 10, true, 'https://example.com/quizzes/androidsetup'),
+(7, 3, 302, 'UI Layouts Quiz', 'Quiz on XML/Jetpack Compose UI principles.', 'graded', 'keep_highest', '2026-02-05T23:59:59Z', '2026-02-01T00:00:00Z', '2026-02-05T23:59:59Z', 30, 1, 50, true, 'https://example.com/quizzes/uilayouts'),
+
+-- Full Stack Web Development (CS460)
+(8, 4, 401, 'React Components Quiz', 'Covers creating and using React components.', 'graded', 'keep_highest', '2026-01-28T23:59:59Z', '2026-01-25T00:00:00Z', '2026-01-28T23:59:59Z', 40, 1, 50, true, 'https://example.com/quizzes/reactcomponents'),
+(9, 4, 402, 'Next.js Routing Quiz', 'Quiz on static and dynamic routes in Next.js.', 'graded', 'keep_highest', '2026-02-18T23:59:59Z', '2026-02-15T00:00:00Z', '2026-02-18T23:59:59Z', 45, 1, 50, true, 'https://example.com/quizzes/nextjsrouting')
+ON CONFLICT (id) DO NOTHING;
+
+-- ==========================================
+-- DISCUSSIONS
+-- ==========================================
+INSERT INTO discussions (id, course_id, assignment_id, user_id, title, message_html, discussion_type, pinned, locked, published, posted_at) VALUES
+-- Applied Statistics (STAT401)
+(1, 1, 101, 1, 'Quiz 1 Clarification', '<p>Please post your questions regarding the Probability Foundations Quiz here.</p>', 'threaded', false, false, true, '2026-01-22T08:00:00Z'),
+(2, 1, NULL, 1, 'General Course Questions', '<p>Post any general questions about the course content or logistics.</p>', 'threaded', false, false, true, '2026-01-15T09:00:00Z'),
+
+-- Advanced Machine Learning (DS450)
+(3, 2, 201, 1, 'Feature Visualization Questions', '<p>Discuss any issues or doubts about the Feature Visualization Report here.</p>', 'threaded', false, false, true, '2026-01-31T10:00:00Z'),
+(4, 2, NULL, 1, 'General ML Questions', '<p>Use this thread for general questions about the DS450 course material.</p>', 'threaded', false, false, true, '2026-01-12T09:00:00Z'),
+
+-- Mobile Application Development (CS430)
+(5, 3, 302, 1, 'UI Layout Questions', '<p>Ask questions related to UI layouts in XML/Jetpack Compose.</p>', 'threaded', false, false, true, '2026-02-06T11:00:00Z'),
+(6, 3, NULL, 1, 'General Mobile Dev Questions', '<p>Use this thread for general queries regarding CS430 labs and assignments.</p>', 'threaded', false, false, true, '2026-01-16T09:00:00Z'),
+
+-- Full Stack Web Development (CS460)
+(7, 4, 401, 1, 'React Components Clarifications', '<p>Post questions about React components assignments here.</p>', 'threaded', false, false, true, '2026-01-29T10:00:00Z'),
+(8, 4, NULL, 1, 'General Web Dev Questions', '<p>Thread for questions about CS460 general course content.</p>', 'threaded', false, false, true, '2026-01-12T09:30:00Z')
+ON CONFLICT (id) DO NOTHING;
