@@ -7,6 +7,7 @@ import {
   searchChatMemories,
   upsertChatMemory,
 } from "@/lib/ai/chat-store";
+import { embedText } from "@/lib/ai/embeddings";
 
 type ToolPayload<T> = {
   uiTarget: string;
@@ -353,40 +354,60 @@ export function createChatTools({ chatId }: { chatId: string }) {
       execute: async ({ queryText, courseId, limit }): Promise<
         ToolPayload<{ matches: unknown[] }>
       > => {
-        const params: unknown[] = [];
-        let paramIndex = 1;
+        const courseCondition = courseId !== undefined ? "AND a.course_id = $3" : "";
+        const courseParams = courseId !== undefined ? [courseId] : [];
 
-        params.push(`%${queryText}%`);
-        const searchParam = `$${paramIndex++}`;
+        let rows: unknown[] = [];
 
-        const conditions = [
-          `(a.name ILIKE ${searchParam} OR COALESCE(a.description, '') ILIKE ${searchParam})`,
-        ];
+        // Try semantic vector search first
+        try {
+          const vec = await embedText(queryText);
+          const vectorLiteral = `[${vec.join(",")}]`;
 
-        if (courseId !== undefined) {
-          params.push(courseId);
-          conditions.push(`a.course_id = $${paramIndex++}`);
+          const result = await query(
+            `SELECT a.id, a.name, a.due_at, a.points_possible, c.code AS course_code, c.id AS course_id
+             FROM assignments a
+             JOIN courses c ON c.id = a.course_id
+             WHERE a.embedding IS NOT NULL ${courseCondition}
+             ORDER BY a.embedding <=> $1::vector ASC
+             LIMIT $2`,
+            [vectorLiteral, limit, ...courseParams]
+          );
+          rows = result.rows;
+        } catch {
+          // Fall back to ILIKE if embedding fails
         }
 
-        params.push(limit);
-        const limitParam = `$${paramIndex++}`;
+        // If vector search returned no results (no embeddings yet), fall back to ILIKE
+        if (rows.length === 0) {
+          const params: unknown[] = [`%${queryText}%`];
+          let paramIndex = 2;
+          const conditions = [
+            `(a.name ILIKE $1 OR COALESCE(a.description, '') ILIKE $1)`,
+          ];
 
-        const result = await query(
-          `SELECT a.id, a.name, a.due_at, a.points_possible, c.code AS course_code, c.id AS course_id
-           FROM assignments a
-           JOIN courses c ON c.id = a.course_id
-           WHERE ${conditions.join(" AND ")}
-           ORDER BY a.due_at ASC NULLS LAST
-           LIMIT ${limitParam}`,
-          params
-        );
+          if (courseId !== undefined) {
+            params.push(courseId);
+            conditions.push(`a.course_id = $${paramIndex++}`);
+          }
+
+          params.push(limit);
+          const result = await query(
+            `SELECT a.id, a.name, a.due_at, a.points_possible, c.code AS course_code, c.id AS course_id
+             FROM assignments a
+             JOIN courses c ON c.id = a.course_id
+             WHERE ${conditions.join(" AND ")}
+             ORDER BY a.due_at ASC NULLS LAST
+             LIMIT $${paramIndex}`,
+            params
+          );
+          rows = result.rows;
+        }
 
         return {
           uiTarget: "assignments.search-results",
-          summary: `Found ${result.rowCount ?? 0} assignments matching "${queryText}".`,
-          payload: {
-            matches: result.rows,
-          },
+          summary: `Found ${rows.length} assignments matching "${queryText}".`,
+          payload: { matches: rows },
         };
       },
     }),

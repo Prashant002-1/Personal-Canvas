@@ -32,9 +32,47 @@ const CARD_GRADIENTS = [
 export default async function Home() {
   const { rows: courses } = await query<CourseRow>(`
     SELECT c.id, c.name, c.code, c.term_name,
-           ce.current_score, ce.current_grade
+           COALESCE(ce.current_score, gs.current_score) AS current_score,
+           COALESCE(
+             ce.current_grade,
+             CASE
+               WHEN gs.current_score IS NULL THEN NULL
+               WHEN gs.current_score >= 93 THEN 'A'
+               WHEN gs.current_score >= 90 THEN 'A-'
+               WHEN gs.current_score >= 87 THEN 'B+'
+               WHEN gs.current_score >= 83 THEN 'B'
+               WHEN gs.current_score >= 80 THEN 'B-'
+               WHEN gs.current_score >= 77 THEN 'C+'
+               WHEN gs.current_score >= 73 THEN 'C'
+               WHEN gs.current_score >= 70 THEN 'C-'
+               WHEN gs.current_score >= 67 THEN 'D+'
+               WHEN gs.current_score >= 63 THEN 'D'
+               WHEN gs.current_score >= 60 THEN 'D-'
+               ELSE 'F'
+             END
+           ) AS current_grade
     FROM courses c
-    LEFT JOIN course_enrollments ce ON ce.course_id = c.id AND ce.type = 'StudentEnrollment'
+    LEFT JOIN LATERAL (
+      SELECT user_id, current_score, current_grade
+      FROM course_enrollments ce
+      WHERE ce.course_id = c.id
+        AND (ce.type = 'StudentEnrollment' OR ce.role ILIKE 'student%')
+      ORDER BY (ce.type = 'StudentEnrollment') DESC, ce.updated_at DESC NULLS LAST, ce.id DESC
+      LIMIT 1
+    ) ce ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT ROUND((SUM(s.score)::numeric / NULLIF(SUM(a.points_possible)::numeric, 0)) * 100, 1) AS current_score
+      FROM submissions s
+      JOIN assignments a ON a.id = s.assignment_id
+      WHERE s.course_id = c.id
+        AND s.score IS NOT NULL
+        AND a.points_possible IS NOT NULL
+        AND a.points_possible > 0
+        AND s.user_id = COALESCE(
+          ce.user_id,
+          (SELECT MIN(s2.user_id) FROM submissions s2 WHERE s2.course_id = c.id)
+        )
+    ) gs ON TRUE
     ORDER BY c.id
   `);
 
@@ -107,9 +145,7 @@ export default async function Home() {
                           
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                              {course.current_grade ? (
-                                <span className="text-sm font-semibold text-foreground">{course.current_grade}</span>
-                              ) : null}
+                              <span className="text-sm font-semibold text-foreground">{course.current_grade ?? "N/A"}</span>
                               {course.current_score !== null ? (
                                 <span className="text-xs text-muted-foreground">{course.current_score.toFixed(1)}%</span>
                               ) : (

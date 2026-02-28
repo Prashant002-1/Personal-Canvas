@@ -4,10 +4,8 @@ import Link from "next/link";
 import {
   LayoutList,
   CheckCircle2,
-  TrendingUp,
   Megaphone,
   Clock,
-  AlertCircle,
   CheckCircle,
   BookMarked,
 } from "lucide-react";
@@ -76,6 +74,10 @@ type QuizRow = {
   points_possible: number | null;
 };
 
+function isExamQuiz(quiz: QuizRow) {
+  return /\b(midterm|final|exam)\b/i.test(`${quiz.title} ${quiz.quiz_type ?? ""}`);
+}
+
 function fmtDate(iso: string | null, opts?: Intl.DateTimeFormatOptions) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString(undefined, opts ?? { month: "short", day: "numeric" });
@@ -108,9 +110,48 @@ export default async function CoursePage({
 
   const { rows: courses } = await query<CourseRow>(`
     SELECT c.id, c.name, c.code, c.term_name, c.start_date, c.end_date, c.syllabus_html,
-           ce.current_score, ce.current_grade, ce.final_score, ce.final_grade
+           COALESCE(ce.current_score, gs.current_score) AS current_score,
+           COALESCE(
+             ce.current_grade,
+             CASE
+               WHEN gs.current_score IS NULL THEN NULL
+               WHEN gs.current_score >= 93 THEN 'A'
+               WHEN gs.current_score >= 90 THEN 'A-'
+               WHEN gs.current_score >= 87 THEN 'B+'
+               WHEN gs.current_score >= 83 THEN 'B'
+               WHEN gs.current_score >= 80 THEN 'B-'
+               WHEN gs.current_score >= 77 THEN 'C+'
+               WHEN gs.current_score >= 73 THEN 'C'
+               WHEN gs.current_score >= 70 THEN 'C-'
+               WHEN gs.current_score >= 67 THEN 'D+'
+               WHEN gs.current_score >= 63 THEN 'D'
+               WHEN gs.current_score >= 60 THEN 'D-'
+               ELSE 'F'
+             END
+           ) AS current_grade,
+           ce.final_score, ce.final_grade
     FROM courses c
-    LEFT JOIN course_enrollments ce ON ce.course_id = c.id AND ce.type = 'StudentEnrollment'
+    LEFT JOIN LATERAL (
+      SELECT user_id, current_score, current_grade, final_score, final_grade
+      FROM course_enrollments ce
+      WHERE ce.course_id = c.id
+        AND (ce.type = 'StudentEnrollment' OR ce.role ILIKE 'student%')
+      ORDER BY (ce.type = 'StudentEnrollment') DESC, ce.updated_at DESC NULLS LAST, ce.id DESC
+      LIMIT 1
+    ) ce ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT ROUND((SUM(s.score)::numeric / NULLIF(SUM(a.points_possible)::numeric, 0)) * 100, 1) AS current_score
+      FROM submissions s
+      JOIN assignments a ON a.id = s.assignment_id
+      WHERE s.course_id = c.id
+        AND s.score IS NOT NULL
+        AND a.points_possible IS NOT NULL
+        AND a.points_possible > 0
+        AND s.user_id = COALESCE(
+          ce.user_id,
+          (SELECT MIN(s2.user_id) FROM submissions s2 WHERE s2.course_id = c.id)
+        )
+    ) gs ON TRUE
     WHERE c.id = $1
   `, [id]);
 
@@ -153,15 +194,22 @@ export default async function CoursePage({
       [id]
     ),
     query<QuizRow>(
-      "SELECT id, title, quiz_type, due_at, time_limit, points_possible FROM quizzes WHERE course_id = $1 ORDER BY due_at ASC NULLS LAST LIMIT 10",
+      "SELECT id, title, quiz_type, due_at, time_limit, points_possible FROM quizzes WHERE course_id = $1 ORDER BY due_at ASC NULLS LAST",
       [id]
     ),
   ]);
 
+  const now = new Date();
   const groupMap = new Map(assignmentGroups.map((g) => [g.id, g]));
-  const gradedAssignments = assignments.filter((a) => a.score !== null);
   const missingCount = assignments.filter((a) => a.missing).length;
-  const pendingCount = assignments.filter((a) => !a.missing && a.sub_workflow_state === null && a.due_at && new Date(a.due_at) > new Date()).length;
+  const pendingCount = assignments.filter((a) => !a.missing && a.sub_workflow_state === null && a.due_at && new Date(a.due_at) > now).length;
+  const examQuizzes = quizzes.filter(isExamQuiz);
+  const quizCount = quizzes.length - examQuizzes.length;
+  const nextExam =
+    examQuizzes
+      .filter((q) => q.due_at && new Date(q.due_at) > now)
+      .sort((a, b) => new Date(a.due_at!).getTime() - new Date(b.due_at!).getTime())[0] ?? null;
+  const displayedQuizzes = quizzes.slice(0, 10);
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] p-8 max-w-7xl mx-auto">
@@ -182,39 +230,35 @@ export default async function CoursePage({
               </span>
               <span className="text-sm font-medium text-muted-foreground">{course.term_name}</span>
             </div>
-            {course.current_grade && (
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-foreground">{course.current_grade}</div>
-                  {course.current_score !== null && (
-                    <div className="text-xs text-muted-foreground">{course.current_score.toFixed(1)}%</div>
-                  )}
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{course.current_grade ?? "N/A"}</div>
+                {course.current_score !== null ? (
+                  <div className="text-xs text-muted-foreground">{course.current_score.toFixed(1)}%</div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">No scored submissions yet</div>
+                )}
               </div>
-            )}
+            </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">{course.name}</h1>
           <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <LayoutList className="w-4 h-4" />
-              {modules.length} modules
-            </div>
-            <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4" />
               {assignments.length} assignments
             </div>
-            {gradedAssignments.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4" />
-                {gradedAssignments.length} graded
-              </div>
-            )}
-            {missingCount > 0 && (
-              <div className="flex items-center gap-1.5 text-red-500">
-                <AlertCircle className="w-4 h-4" />
-                {missingCount} missing
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              <BookMarked className="w-4 h-4" />
+              {quizCount} quizzes
+            </div>
+            <div className="flex items-center gap-1.5">
+              <LayoutList className="w-4 h-4" />
+              {examQuizzes.length} exams
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4" />
+              {nextExam ? `Next exam: ${fmtDate(nextExam.due_at)}` : "No upcoming exam"}
+            </div>
           </div>
         </div>
       </header>
@@ -231,33 +275,6 @@ export default async function CoursePage({
         announcements={announcements}
         standardView={
           <div className="space-y-8">
-            {/* Grade by group */}
-            {assignmentGroups.length > 0 && (
-              <div className="bg-card border rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Grade Breakdown
-                  </h3>
-                  {course.current_grade && (
-                    <Badge variant="secondary" className="ml-auto text-sm font-semibold">
-                      {course.current_grade} · {course.current_score?.toFixed(1)}%
-                    </Badge>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {assignmentGroups.map((g) => (
-                    <div key={g.id} className="rounded-xl bg-muted/50 p-3">
-                      <div className="text-xs text-muted-foreground truncate">{g.name}</div>
-                      {g.group_weight !== null && (
-                        <div className="text-sm font-semibold mt-1">{g.group_weight}%</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left: assignments + modules */}
               <div className="lg:col-span-2 space-y-8">
@@ -269,7 +286,7 @@ export default async function CoursePage({
                       Assignments
                     </h3>
                     <span className="ml-auto text-xs text-muted-foreground">
-                      {pendingCount} upcoming
+                      {pendingCount} upcoming{missingCount > 0 ? ` · ${missingCount} missing` : ""}
                     </span>
                   </div>
                   <div className="border rounded-2xl bg-card divide-y overflow-hidden">
@@ -363,7 +380,7 @@ export default async function CoursePage({
                       </h3>
                     </div>
                     <div className="border rounded-2xl bg-card divide-y overflow-hidden">
-                      {quizzes.map((q) => (
+                      {displayedQuizzes.map((q) => (
                         <div key={q.id} className="p-4 hover:bg-muted/30 transition-colors">
                           <p className="text-sm font-medium leading-snug mb-1">{q.title}</p>
                           <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
@@ -374,6 +391,11 @@ export default async function CoursePage({
                         </div>
                       ))}
                     </div>
+                    {quizzes.length > displayedQuizzes.length && (
+                      <p className="text-xs text-muted-foreground mt-2 px-1">
+                        Showing {displayedQuizzes.length} of {quizzes.length} quizzes.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -395,6 +417,22 @@ export default async function CoursePage({
                               {fmtDate(a.posted_at, { month: "short", day: "numeric", year: "numeric" })}
                             </p>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {assignmentGroups.length > 0 && (
+                  <div className="rounded-2xl border bg-muted/20 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Badge variant="outline" className="text-[11px] uppercase tracking-wide">Group Weights</Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {assignmentGroups.map((g) => (
+                        <div key={g.id} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground truncate pr-4">{g.name}</span>
+                          <span className="font-medium text-foreground">{g.group_weight !== null ? `${g.group_weight}%` : "—"}</span>
                         </div>
                       ))}
                     </div>

@@ -1,12 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { CourseDeepDive } from "./CourseDeepDive";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, MessageSquare } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
-import { writeSessionJson } from "@/lib/client-storage";
 
 type Course = {
   id: number;
@@ -61,7 +59,6 @@ export function CourseView({
   announcements?: Announcement[];
   standardView: React.ReactNode;
 }) {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("Course");
   const [refreshKey, setRefreshKey] = useState(0);
   const prevIndex = useRef(0);
@@ -73,15 +70,6 @@ export function CourseView({
 
   function handleRefresh() {
     setRefreshKey((k) => k + 1);
-  }
-
-  function handleChat() {
-    writeSessionJson("chat-context", {
-      type: "course",
-      title: course.name,
-      contextData: `Course: ${course.name} (${course.code})\nTerm: ${course.term_name}\nCurrent grade: ${course.current_grade ?? "N/A"} (${course.current_score?.toFixed(1) ?? "N/A"}%)\nAssignments: ${assignments.map((a) => `${a.name} (Due: ${a.due_at})`).join(", ")}\nModules: ${modules.map((m) => m.name).join(", ")}`,
-    });
-    router.push("/chat");
   }
 
   return (
@@ -113,10 +101,6 @@ export function CourseView({
             animate={{ opacity: 1 }}
             className="flex items-center gap-2"
           >
-            <Button variant="ghost" size="sm" onClick={handleChat} className="gap-2 text-muted-foreground hover:text-foreground">
-              <MessageSquare className="w-4 h-4" />
-              Chat
-            </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2">
               <RotateCcw className="w-4 h-4" />
               Refresh

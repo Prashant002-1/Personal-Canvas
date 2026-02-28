@@ -2,6 +2,7 @@ import { appendFile, mkdir } from "fs/promises";
 import path from "path";
 import type { UIMessage } from "ai";
 import { query } from "@/lib/db";
+import { embedText } from "@/lib/ai/embeddings";
 
 const transcriptDirectory =
   process.env.CHAT_TRANSCRIPT_MIRROR_DIR ?? path.join(process.cwd(), ".chats");
@@ -125,6 +126,10 @@ async function ensureChatTables(): Promise<void> {
       await query(
         `CREATE INDEX IF NOT EXISTS idx_chat_planner_events_chat_id ON chat_planner_events(chat_id, created_at DESC)`
       );
+
+      // Embedding support — resize columns to model dims (2048), add memory embedding column
+      await query(`ALTER TABLE chat_memories ADD COLUMN IF NOT EXISTS embedding vector(2048)`);
+      await query(`CREATE INDEX IF NOT EXISTS idx_chat_memories_embedding ON chat_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10)`);
     })();
   }
 
@@ -260,14 +265,24 @@ export async function upsertChatMemory({
 }): Promise<void> {
   await ensureChatTables();
 
+  // Generate embedding best-effort — don't fail the upsert if embedding fails
+  let embeddingLiteral: string | null = null;
+  try {
+    const vec = await embedText(`${memoryKey}: ${memoryValue}`);
+    embeddingLiteral = `[${vec.join(",")}]`;
+  } catch {
+    // Memory is still saved; vector search will fall back to ILIKE for this row
+  }
+
   await query(
-    `INSERT INTO chat_memories (chat_id, memory_key, memory_value, source, updated_at)
-     VALUES ($1, $2, $3, $4, NOW())
+    `INSERT INTO chat_memories (chat_id, memory_key, memory_value, source, embedding, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
      ON CONFLICT (chat_id, memory_key) DO UPDATE SET
        memory_value = EXCLUDED.memory_value,
        source = EXCLUDED.source,
+       embedding = COALESCE(EXCLUDED.embedding, chat_memories.embedding),
        updated_at = NOW()`,
-    [chatId, memoryKey, memoryValue, source]
+    [chatId, memoryKey, memoryValue, source, embeddingLiteral]
   );
 }
 
@@ -282,17 +297,42 @@ export async function searchChatMemories({
 }) {
   await ensureChatTables();
 
-  const result = await query(
-    `SELECT memory_key, memory_value, source, updated_at
-     FROM chat_memories
-     WHERE chat_id = $1
-       AND (memory_key ILIKE $2 OR memory_value ILIKE $2)
-     ORDER BY updated_at DESC
-     LIMIT $3`,
-    [chatId, `%${queryText}%`, limit]
-  );
+  // Try semantic vector search; fall back to ILIKE if embedding generation fails
+  try {
+    const vec = await embedText(queryText);
+    const vectorLiteral = `[${vec.join(",")}]`;
 
-  return result.rows;
+    // Hybrid: vector similarity for embedded rows, ILIKE keyword for unembedded rows
+    const result = await query(
+      `SELECT memory_key, memory_value, source, updated_at
+       FROM chat_memories
+       WHERE chat_id = $1
+         AND (
+           embedding IS NOT NULL
+           OR (memory_key ILIKE $3 OR memory_value ILIKE $3)
+         )
+       ORDER BY
+         CASE WHEN embedding IS NOT NULL THEN embedding <=> $2::vector ELSE 2.0 END ASC,
+         updated_at DESC
+       LIMIT $4`,
+      [chatId, vectorLiteral, `%${queryText}%`, limit]
+    );
+
+    return result.rows;
+  } catch {
+    // Fallback: plain ILIKE
+    const result = await query(
+      `SELECT memory_key, memory_value, source, updated_at
+       FROM chat_memories
+       WHERE chat_id = $1
+         AND (memory_key ILIKE $2 OR memory_value ILIKE $2)
+       ORDER BY updated_at DESC
+       LIMIT $3`,
+      [chatId, `%${queryText}%`, limit]
+    );
+
+    return result.rows;
+  }
 }
 
 export async function extractMemoriesFromUserText({
