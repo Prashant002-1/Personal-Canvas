@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChatInterface } from "@/components/ai/ChatInterface";
 import { readLocalJson } from "@/lib/client-storage";
 
 export default function ChatPage() {
-  const [botName] = useState<string | null>(() =>
-    readLocalJson<string>("canvas-bot-name")
-  );
+  const [botName, setBotName] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBotName(readLocalJson<string>("canvas-bot-name"));
+  }, []);
 
   return (
     <div className="bg-background">

@@ -90,7 +90,7 @@ async function compactMessages({
   let newSummary: string;
   try {
     const { text } = await generateText({
-      model: openrouter("arcee-ai/trinity-large-preview:free"),
+      model: openrouter("z-ai/glm-4.5-air:free"),
       messages: [
         {
           role: "user" as const,
@@ -137,11 +137,14 @@ export async function GET(req: Request) {
   }
 
   const storedSession = await loadChatSession(chatId);
+  const cleanMessages = storedSession.messages.filter(
+    (m) => Array.isArray(m.parts) && m.parts.length > 0
+  );
   const validatedMessages: UIMessage[] =
-    storedSession.messages.length === 0
+    cleanMessages.length === 0
       ? []
       : await validateUIMessages<UIMessage>({
-          messages: storedSession.messages,
+          messages: cleanMessages,
         });
 
   return Response.json({
@@ -215,7 +218,9 @@ export async function POST(req: Request) {
     }
 
     const validatedMessages = await validateUIMessages<UIMessage>({
-      messages: mergedMessages,
+      messages: mergedMessages.filter(
+        (m) => Array.isArray(m.parts) && m.parts.length > 0
+      ),
     });
 
     const compacted = await compactMessages({
@@ -243,7 +248,7 @@ export async function POST(req: Request) {
     });
 
     const result = streamText({
-      model: openrouter("arcee-ai/trinity-large-preview:free"),
+      model: openrouter("z-ai/glm-4.5-air:free"),
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(8),

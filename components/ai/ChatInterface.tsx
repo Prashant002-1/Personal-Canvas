@@ -155,7 +155,9 @@ export function ChatInterface({
     await sendMessage({ text });
   }
 
-  const visibleMessages = messages.filter((m) => m.role !== "system");
+  const visibleMessages = messages
+    .filter((m) => m.role !== "system")
+    .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
   const hasSummary = sessionMeta && sessionMeta.summaryCount > 0;
   const messagesUntilCompaction = sessionMeta
     ? Math.max(0, sessionMeta.compactionThreshold - sessionMeta.messageCount)
