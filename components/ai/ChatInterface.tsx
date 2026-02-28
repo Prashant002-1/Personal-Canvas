@@ -151,8 +151,8 @@ export function ChatInterface({
     e.preventDefault();
     const text = input.trim();
     if (!text || isLoading) return;
-    await sendMessage({ text });
     setInput("");
+    await sendMessage({ text });
   }
 
   const visibleMessages = messages.filter((m) => m.role !== "system");
@@ -282,12 +282,10 @@ export function ChatInterface({
         {sessionMeta && visibleMessages.length > 0 && (
           <div className="max-w-3xl mx-auto flex items-center gap-2 mb-2">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-              <span>{sessionMeta.messageCount} messages</span>
-              {messagesUntilCompaction !== null && messagesUntilCompaction <= 10 && (
-                <>
-                  <span>·</span>
-                  <span className="text-amber-500/70">summarizes in {messagesUntilCompaction}</span>
-                </>
+              {messagesUntilCompaction !== null && (
+                <span className={messagesUntilCompaction <= 5 ? "text-amber-500/70" : ""}>
+                  {messagesUntilCompaction} before compaction
+                </span>
               )}
               {sessionMeta.summaryCount > 0 && (
                 <>

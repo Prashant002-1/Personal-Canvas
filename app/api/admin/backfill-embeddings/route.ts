@@ -29,10 +29,7 @@ async function migrateVectorColumns(): Promise<void> {
     END $$
   `);
 
-  await query(`
-    CREATE INDEX IF NOT EXISTS idx_assignments_embedding
-      ON assignments USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10)
-  `);
+  // Note: pgvector ivfflat/hnsw indexes cap at 2000 dims; model outputs 2048 — exact scan is fine at demo scale
 }
 
 export async function POST(): Promise<Response> {

@@ -127,9 +127,8 @@ async function ensureChatTables(): Promise<void> {
         `CREATE INDEX IF NOT EXISTS idx_chat_planner_events_chat_id ON chat_planner_events(chat_id, created_at DESC)`
       );
 
-      // Embedding support — resize columns to model dims (2048), add memory embedding column
+      // Embedding support — add memory embedding column (no index: pgvector ivfflat caps at 2000 dims, model outputs 2048)
       await query(`ALTER TABLE chat_memories ADD COLUMN IF NOT EXISTS embedding vector(2048)`);
-      await query(`CREATE INDEX IF NOT EXISTS idx_chat_memories_embedding ON chat_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10)`);
     })();
   }
 
