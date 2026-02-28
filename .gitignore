@@ -72,5 +72,6 @@ Desktop.ini
 .mcp.json
 .tessl/
 tessl.json
-
 .worktrees/
+
+!README.md
