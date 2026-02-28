@@ -12,9 +12,27 @@ type ChatContext = {
   contextData: string;
 };
 
+function toChatId(context: ChatContext | null): string {
+  if (!context) return "general-chat";
+
+  const base =
+    context.type === "course" && context.title
+      ? `course-${context.title}`
+      : "dashboard-chat";
+
+  const normalized = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+
+  return normalized || "general-chat";
+}
+
 export default function ChatPage() {
   const router = useRouter();
   const [context, setContext] = useState<ChatContext | null>(null);
+  const chatId = toChatId(context);
 
   useEffect(() => {
     try {
@@ -44,6 +62,7 @@ export default function ChatPage() {
 
       <div className="flex-1 max-w-4xl w-full mx-auto px-6 py-6 flex flex-col">
         <ChatInterface
+          chatId={chatId}
           contextData={context?.contextData ?? ""}
           className="flex-1 rounded-3xl"
         />

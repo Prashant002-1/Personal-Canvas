@@ -4,27 +4,6 @@ PostgreSQL 16 with `pgvector`, running via Docker.
 
 This schema keeps the original Canvas-mirror core and adds a focused extension layer so AI + UI can query grades, instructors, announcements, and richer course context without unnecessary complexity.
 
-## Scope
-
-- **Single local student profile** for now (no multi-user product partitioning yet).
-- Keep existing core tables used by the current app:
-  - `courses`
-  - `assignments`
-  - `modules`
-  - `module_items`
-- Add extension tables for completeness:
-  - `users`
-  - `course_enrollments`
-  - `assignment_groups`
-  - `submissions`
-  - `announcements`
-  - `quizzes`
-  - `discussions`
-  - `pages`
-  - `files`
-  - `calendar_events`
-  - `course_grade_snapshots`
-
 ---
 
 ## Core Tables (Canvas-compatible base)

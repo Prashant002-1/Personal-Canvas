@@ -1,60 +1,102 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useChat } from "@ai-sdk/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Send, User, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
+} from "ai";
 
-type Message = { id: string; role: "user" | "assistant"; content: string };
+type ToolOutputPart = Extract<
+  UIMessage["parts"][number],
+  { type: `tool-${string}` | "dynamic-tool" }
+>;
 
-export function ChatInterface({ contextData, className }: { contextData: string; className?: string }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+function isToolOutputPart(
+  part: UIMessage["parts"][number]
+): part is ToolOutputPart {
+  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function extractMessageText(message: UIMessage): string {
+  return message.parts
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
+
+export function ChatInterface({
+  chatId,
+  contextData,
+  className,
+}: {
+  chatId: string;
+  contextData: string;
+  className?: string;
+}) {
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { messages, sendMessage, status, error, setMessages } = useChat({
+    id: chatId,
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      prepareSendMessagesRequest: ({ id, messages }) => ({
+        body: {
+          id,
+          message: messages[messages.length - 1],
+          context: contextData,
+        },
+      }),
+    }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+  });
+
+  const isLoading = status === "submitted" || status === "streaming";
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, status]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadHistory() {
+      const res = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`);
+      if (!res.ok) return;
+
+      const data: { messages?: UIMessage[] } = await res.json();
+      if (!ignore && Array.isArray(data.messages)) {
+        setMessages(data.messages);
+      }
+    }
+
+    loadHistory();
+
+    return () => {
+      ignore = true;
+    };
+  }, [chatId, setMessages]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
     if (!text || isLoading) return;
 
-    const userMessage: Message = { id: Date.now().toString(), role: "user", content: text };
-    const history = [...messages, userMessage];
-    setMessages(history);
+    await sendMessage({ text });
     setInput("");
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: history.map((m) => ({ role: m.role, content: m.content })),
-          context: contextData,
-        }),
-      });
-      const data = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now().toString(), role: "assistant", content: data.reply },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now().toString(), role: "assistant", content: "Something went wrong. Please try again." },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
   }
 
   return (
@@ -73,18 +115,78 @@ export function ChatInterface({ contextData, className }: { contextData: string;
             </div>
           )}
 
-          {messages.map((m) => (
+          {messages.map((m) => {
+            const text = extractMessageText(m);
+            const toolParts = m.parts.filter(isToolOutputPart);
+
+            return (
             <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
                 {m.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
               <div className={`px-4 py-3 rounded-2xl max-w-[80%] ${m.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted/50 rounded-tl-sm"}`}>
-                <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                </div>
+                {text && (
+                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                  </div>
+                )}
+
+                {m.role === "assistant" && toolParts.length > 0 && (
+                  <div className={`space-y-2 ${text ? "mt-3" : ""}`}>
+                    {toolParts.map((part) => {
+                      if (part.state === "output-error") {
+                        return (
+                          <div key={part.toolCallId} className="rounded-lg border border-red-300/40 bg-red-500/5 p-2 text-xs">
+                            Tool error: {part.errorText ?? "Unknown error"}
+                          </div>
+                        );
+                      }
+
+                      if (part.state === "output-available") {
+                        const output = part.output;
+                        const summary =
+                          isRecord(output) && typeof output.summary === "string"
+                            ? output.summary
+                            : null;
+                        const uiTarget =
+                          isRecord(output) && typeof output.uiTarget === "string"
+                            ? output.uiTarget
+                            : null;
+                        const payload =
+                          isRecord(output) && "payload" in output
+                            ? output.payload
+                            : output;
+
+                        return (
+                          <div key={part.toolCallId} className="rounded-lg border bg-background/70 p-2 text-xs">
+                            {(summary || uiTarget) && (
+                              <div className="mb-2 space-y-1">
+                                {summary && <p className="font-medium">{summary}</p>}
+                                {uiTarget && (
+                                  <p className="text-muted-foreground">
+                                    UI Target: <span className="font-mono">{uiTarget}</span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-words text-[11px]">
+                              {JSON.stringify(payload, null, 2)}
+                            </pre>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={part.toolCallId} className="rounded-lg border bg-background/50 p-2 text-xs text-muted-foreground">
+                          Running {part.type.replace("tool-", "")}...
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
-          ))}
+          )})}
 
           {isLoading && (
             <div className="flex gap-3">
@@ -96,6 +198,12 @@ export function ChatInterface({ contextData, className }: { contextData: string;
                 <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0.2s]" />
                 <div className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce [animation-delay:0.4s]" />
               </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-xl border border-red-300/40 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">
+              {error.message}
             </div>
           )}
         </div>
