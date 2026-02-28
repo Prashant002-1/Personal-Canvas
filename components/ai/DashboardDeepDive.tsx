@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, AlertTriangle, Target, Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { readLocalJson, removeLocalKey, writeLocalJson } from "@/lib/client-storage";
 
 const CACHE_KEY = "dashboard-insights";
 
@@ -14,8 +15,17 @@ type DashboardData = {
   insight: string;
   workloadWarning?: string;
 };
+type Course = {
+  name: string;
+  code: string;
+};
+type UpcomingAssignment = {
+  name: string;
+  due_at: string | null;
+  course_code: string;
+};
 
-const urgencyConfig = {
+const urgencyConfig: Record<Priority["urgency"], { label: string; className: string }> = {
   high: { label: "High Priority", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800" },
   medium: { label: "Medium", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800" },
   low: { label: "Low", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" },
@@ -26,8 +36,8 @@ export function DashboardDeepDive({
   upcomingAssignments,
   refreshKey = 0,
 }: {
-  courses: any[];
-  upcomingAssignments: any[];
+  courses: Course[];
+  upcomingAssignments: UpcomingAssignment[];
   refreshKey?: number;
 }) {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -36,16 +46,14 @@ export function DashboardDeepDive({
 
   useEffect(() => {
     if (refreshKey === 0) {
-      try {
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-          setData(JSON.parse(cached));
-          setIsLoading(false);
-          return;
-        }
-      } catch {}
+      const cached = readLocalJson<DashboardData>(CACHE_KEY);
+      if (cached) {
+        setData(cached);
+        setIsLoading(false);
+        return;
+      }
     } else {
-      localStorage.removeItem(CACHE_KEY);
+      removeLocalKey(CACHE_KEY);
     }
 
     setIsLoading(true);
@@ -55,14 +63,23 @@ export function DashboardDeepDive({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ courses, upcomingAssignments }),
     })
-      .then((r) => r.json())
-      .then((d) => {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(d));
-        setData(d);
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load dashboard briefing.");
+        }
+        return (await response.json()) as DashboardData;
       })
-      .catch(() => setError("Failed to load AI briefing."))
+      .then((payload) => {
+        writeLocalJson(CACHE_KEY, payload);
+        setData(payload);
+      })
+      .catch((fetchError: unknown) => {
+        const message =
+          fetchError instanceof Error ? fetchError.message : "Failed to load dashboard briefing.";
+        setError(message);
+      })
       .finally(() => setIsLoading(false));
-  }, [refreshKey]);
+  }, [courses, refreshKey, upcomingAssignments]);
 
   if (isLoading) {
     return (
@@ -136,4 +153,3 @@ export function DashboardDeepDive({
     </motion.section>
   );
 }
-

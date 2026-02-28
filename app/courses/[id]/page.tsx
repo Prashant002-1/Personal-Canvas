@@ -3,6 +3,38 @@ import { CourseView } from "@/components/ai/CourseView";
 import Link from "next/link";
 import { LayoutList, CheckCircle2 } from "lucide-react";
 
+type CourseRow = {
+  id: number;
+  name: string;
+  code: string;
+  term_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  syllabus_html: string | null;
+};
+
+type AssignmentRow = {
+  id: number;
+  name: string;
+  due_at: string | null;
+  points_possible: number | null;
+  description: string | null;
+};
+
+type ModuleRow = {
+  id: number;
+  name: string;
+  position: number;
+};
+
+type ModuleItemRow = {
+  id: number;
+  module_id: number;
+  title: string;
+  type: string;
+  position: number;
+};
+
 export default async function CoursePage({
   params,
 }: {
@@ -10,7 +42,7 @@ export default async function CoursePage({
 }) {
   const { id } = await params;
   
-  const { rows: courses } = await query(
+  const { rows: courses } = await query<CourseRow>(
     "SELECT id, name, code, term_name, start_date, end_date, syllabus_html FROM courses WHERE id = $1",
     [id]
   );
@@ -21,17 +53,17 @@ export default async function CoursePage({
 
   const course = courses[0];
 
-  const { rows: assignments } = await query(
+  const { rows: assignments } = await query<AssignmentRow>(
     "SELECT id, name, due_at, points_possible, description FROM assignments WHERE course_id = $1 ORDER BY due_at ASC NULLS LAST",
     [id]
   );
 
-  const { rows: modules } = await query(
+  const { rows: modules } = await query<ModuleRow>(
     "SELECT id, name, position FROM modules WHERE course_id = $1 ORDER BY position",
     [id]
   );
 
-  const { rows: moduleItems } = await query(
+  const { rows: moduleItems } = await query<ModuleItemRow>(
     "SELECT id, module_id, title, type, position FROM module_items WHERE course_id = $1 ORDER BY module_id, position",
     [id]
   );
@@ -39,7 +71,7 @@ export default async function CoursePage({
   return (
     <main className="min-h-screen p-8 max-w-7xl mx-auto">
       <Link href="/" className="text-sm text-muted-foreground hover:text-primary mb-8 inline-block transition-colors">
-        ← Back to Dashboard
+        Back to Dashboard
       </Link>
       
       <header className="mb-12 bg-card border rounded-3xl p-8 shadow-sm relative overflow-hidden">
@@ -79,32 +111,36 @@ export default async function CoursePage({
                 <LayoutList className="w-5 h-5 text-primary" />
                 Modules
               </h2>
-              <div className="space-y-4">
-                {modules.map((module) => (
-                  <div key={module.id} className="border rounded-2xl bg-card overflow-hidden">
-                    <div className="p-4 bg-muted/30 border-b font-medium">
-                      {module.name}
-                    </div>
-                    <div className="divide-y">
-                      {moduleItems
-                        .filter((item) => item.module_id === module.id)
-                        .map((item) => (
+                <div className="space-y-4">
+                {modules.map((module) => {
+                  const itemsInModule = moduleItems.filter(
+                    (item) => item.module_id === module.id
+                  );
+
+                  return (
+                    <div key={module.id} className="border rounded-2xl bg-card overflow-hidden">
+                      <div className="p-4 bg-muted/30 border-b font-medium">
+                        {module.name}
+                      </div>
+                      <div className="divide-y">
+                        {itemsInModule.map((item) => (
                           <div key={item.id} className="p-4 text-sm hover:bg-muted/50 transition-colors flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-primary/50" />
                             {item.title}
                           </div>
                         ))}
-                      {moduleItems.filter((item) => item.module_id === module.id).length === 0 && (
-                        <div className="p-4 text-sm text-muted-foreground italic">
-                          No items in this module.
-                        </div>
-                      )}
+                        {itemsInModule.length === 0 && (
+                          <div className="p-4 text-sm text-muted-foreground italic">
+                            No module content available.
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {modules.length === 0 && (
                   <div className="p-8 text-center border rounded-2xl bg-card text-muted-foreground">
-                    No modules found for this course.
+                    No modules available.
                   </div>
                 )}
               </div>
@@ -131,7 +167,7 @@ export default async function CoursePage({
                 ))}
                 {assignments.length === 0 && (
                   <div className="p-8 text-center text-muted-foreground text-sm">
-                    No assignments found.
+                    No assignments available.
                   </div>
                 )}
               </div>

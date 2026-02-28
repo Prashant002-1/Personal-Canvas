@@ -4,19 +4,39 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, ArrowRight, BookOpen, Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { readLocalJson, removeLocalKey, writeLocalJson } from "@/lib/client-storage";
 
 type NextStep = { action: string; deadline?: string; priority: "high" | "medium" | "low" };
 type Assignment = { name: string; effort: "low" | "medium" | "high"; concepts: string[]; dueDate?: string };
 type ModuleInsight = { currentFocus: string; keyTopics: string[]; studyTip: string };
 type CourseData = { summary: string; nextSteps: NextStep[]; assignments: Assignment[]; moduleInsight: ModuleInsight };
+type Course = {
+  id: number;
+  name: string;
+  code: string;
+  term_name: string | null;
+  syllabus_html: string | null;
+};
+type CourseAssignment = {
+  name: string;
+  due_at: string | null;
+  points_possible: number | null;
+};
+type Module = {
+  id: number;
+  name: string;
+};
+type ModuleItem = {
+  module_id: number;
+};
 
-const priorityConfig = {
+const priorityConfig: Record<NextStep["priority"], string> = {
   high: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
   medium: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800",
   low: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
 };
 
-const effortConfig = {
+const effortConfig: Record<Assignment["effort"], { label: string; className: string }> = {
   high: { label: "Heavy lift", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
   medium: { label: "Moderate", className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
   low: { label: "Light", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
@@ -29,10 +49,10 @@ export function CourseDeepDive({
   moduleItems,
   refreshKey = 0,
 }: {
-  course: any;
-  assignments: any[];
-  modules: any[];
-  moduleItems: any[];
+  course: Course;
+  assignments: CourseAssignment[];
+  modules: Module[];
+  moduleItems: ModuleItem[];
   refreshKey?: number;
 }) {
   const [data, setData] = useState<CourseData | null>(null);
@@ -43,16 +63,14 @@ export function CourseDeepDive({
 
   useEffect(() => {
     if (refreshKey === 0) {
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          setData(JSON.parse(cached));
-          setIsLoading(false);
-          return;
-        }
-      } catch {}
+      const cached = readLocalJson<CourseData>(cacheKey);
+      if (cached) {
+        setData(cached);
+        setIsLoading(false);
+        return;
+      }
     } else {
-      localStorage.removeItem(cacheKey);
+      removeLocalKey(cacheKey);
     }
 
     setIsLoading(true);
@@ -62,14 +80,23 @@ export function CourseDeepDive({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ course, assignments, modules, moduleItems }),
     })
-      .then((r) => r.json())
-      .then((d) => {
-        localStorage.setItem(cacheKey, JSON.stringify(d));
-        setData(d);
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load course analysis.");
+        }
+        return (await response.json()) as CourseData;
       })
-      .catch(() => setError("Failed to load AI analysis."))
+      .then((payload) => {
+        writeLocalJson(cacheKey, payload);
+        setData(payload);
+      })
+      .catch((fetchError: unknown) => {
+        const message =
+          fetchError instanceof Error ? fetchError.message : "Failed to load course analysis.";
+        setError(message);
+      })
       .finally(() => setIsLoading(false));
-  }, [refreshKey]);
+  }, [assignments, cacheKey, course, moduleItems, modules, refreshKey]);
 
   if (isLoading) {
     return (

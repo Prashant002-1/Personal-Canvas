@@ -11,7 +11,6 @@ export function CourseTray({ children }: { children: React.ReactNode }) {
   function handleOpenChange(isOpen: boolean) {
     setOpen(isOpen);
     if (!isOpen) {
-      // Wait for animation to finish before navigating back
       setTimeout(() => {
         router.back();
       }, 300);

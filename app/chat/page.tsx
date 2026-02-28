@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChatInterface } from "@/components/ai/ChatInterface";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
+import { readSessionJson } from "@/lib/client-storage";
 
 type ChatContext = {
   type: "dashboard" | "course";
@@ -35,10 +36,10 @@ export default function ChatPage() {
   const chatId = toChatId(context);
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("chat-context");
-      if (raw) setContext(JSON.parse(raw));
-    } catch {}
+    const storedContext = readSessionJson<ChatContext>("chat-context");
+    if (storedContext) {
+      setContext(storedContext);
+    }
   }, []);
 
   return (

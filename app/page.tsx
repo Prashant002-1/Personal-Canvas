@@ -5,12 +5,35 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DashboardView } from "@/components/ai/DashboardView";
 
+type CourseRow = {
+  id: number;
+  name: string;
+  code: string;
+  term_name: string | null;
+};
+
+type UpcomingAssignmentRow = {
+  id: number;
+  name: string;
+  due_at: string | null;
+  course_name: string;
+  course_code: string;
+  course_id: number;
+};
+
+const CARD_GRADIENTS = [
+  "from-blue-500/10 to-cyan-500/10",
+  "from-purple-500/10 to-indigo-500/10",
+  "from-emerald-500/10 to-teal-500/10",
+  "from-orange-500/10 to-amber-500/10",
+];
+
 export default async function Home() {
-  const { rows: courses } = await query(
+  const { rows: courses } = await query<CourseRow>(
     "SELECT id, name, code, term_name FROM courses ORDER BY id"
   );
 
-  const { rows: upcomingAssignments } = await query(`
+  const { rows: upcomingAssignments } = await query<UpcomingAssignmentRow>(`
     SELECT a.id, a.name, a.due_at, c.name as course_name, c.code as course_code, c.id as course_id
     FROM assignments a
     JOIN courses c ON a.course_id = c.id
@@ -37,12 +60,12 @@ export default async function Home() {
 
       {courses.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center border rounded-2xl bg-card/50 backdrop-blur-sm">
-          <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
-            <span className="text-2xl">📚</span>
+          <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 text-primary">
+            <BookOpen className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-semibold">No courses found</h2>
+          <h2 className="text-xl font-semibold">No course data available</h2>
           <p className="text-muted-foreground mt-2 max-w-md">
-            Run the parser script to fetch your Canvas data and populate the database.
+            Course information is currently unavailable.
           </p>
         </div>
       ) : (
@@ -51,7 +74,6 @@ export default async function Home() {
           upcomingAssignments={upcomingAssignments} 
           standardView={
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Main Content: Courses */}
               <div className="lg:col-span-2 space-y-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -65,14 +87,7 @@ export default async function Home() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {courses.map((course, i) => {
-                  // Generate a subtle gradient based on index for visual variety
-                  const gradients = [
-                    "from-blue-500/10 to-cyan-500/10",
-                    "from-purple-500/10 to-indigo-500/10",
-                    "from-emerald-500/10 to-teal-500/10",
-                    "from-orange-500/10 to-amber-500/10"
-                  ];
-                  const gradient = gradients[i % gradients.length];
+                  const gradient = CARD_GRADIENTS[i % CARD_GRADIENTS.length];
 
                   return (
                     <Link key={course.id} href={`/courses/${course.id}`}>
@@ -113,7 +128,6 @@ export default async function Home() {
               </div>
             </div>
 
-            {/* Sidebar: Upcoming Deadlines */}
             <div className="space-y-8">
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary" />
@@ -145,7 +159,7 @@ export default async function Home() {
                             </h4>
                             <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                               <span className="truncate max-w-[120px]">{assignment.course_code}</span>
-                              <span>•</span>
+                              <span>|</span>
                               <span className={assignment.due_at ? "text-orange-600 dark:text-orange-400 font-medium" : ""}>
                                 {assignment.due_at ? new Date(assignment.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : "No due date"}
                               </span>

@@ -6,6 +6,34 @@ import { CourseDeepDive } from "./CourseDeepDive";
 import { Button } from "@/components/ui/button";
 import { Sparkles, RotateCcw, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { readLocalJson, writeSessionJson } from "@/lib/client-storage";
+
+type Course = {
+  id: number;
+  name: string;
+  code: string;
+  term_name: string | null;
+  syllabus_html: string | null;
+};
+
+type Assignment = {
+  name: string;
+  due_at: string | null;
+  points_possible: number | null;
+};
+
+type Module = {
+  id: number;
+  name: string;
+};
+
+type ModuleItem = {
+  id: number;
+  module_id: number;
+  title: string;
+  type: string;
+  position: number;
+};
 
 export function CourseView({
   course,
@@ -14,10 +42,10 @@ export function CourseView({
   moduleItems,
   standardView,
 }: {
-  course: any;
-  assignments: any[];
-  modules: any[];
-  moduleItems: any[];
+  course: Course;
+  assignments: Assignment[];
+  modules: Module[];
+  moduleItems: ModuleItem[];
   standardView: React.ReactNode;
 }) {
   const router = useRouter();
@@ -25,11 +53,9 @@ export function CourseView({
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem(`course-insights-${course?.id}`)) {
-        setInsightsVisible(true);
-      }
-    } catch {}
+    if (course?.id && readLocalJson(`course-insights-${course.id}`)) {
+      setInsightsVisible(true);
+    }
   }, [course?.id]);
 
   function handleGenerate() {
@@ -41,16 +67,11 @@ export function CourseView({
   }
 
   function handleChat() {
-    try {
-      sessionStorage.setItem(
-        "chat-context",
-        JSON.stringify({
-          type: "course",
-          title: course.name,
-          contextData: `Course: ${course.name} (${course.code})\nTerm: ${course.term_name}\nAssignments: ${assignments.map((a) => `${a.name} (Due: ${a.due_at}, Points: ${a.points_possible})`).join(", ")}\nModules: ${modules.map((m) => m.name).join(", ")}`,
-        })
-      );
-    } catch {}
+    writeSessionJson("chat-context", {
+      type: "course",
+      title: course.name,
+      contextData: `Course: ${course.name} (${course.code})\nTerm: ${course.term_name}\nAssignments: ${assignments.map((a) => `${a.name} (Due: ${a.due_at}, Points: ${a.points_possible})`).join(", ")}\nModules: ${modules.map((m) => m.name).join(", ")}`,
+    });
     router.push("/chat");
   }
 

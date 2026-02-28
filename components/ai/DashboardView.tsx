@@ -6,14 +6,26 @@ import { DashboardDeepDive } from "./DashboardDeepDive";
 import { Button } from "@/components/ui/button";
 import { Sparkles, RotateCcw, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { readLocalJson, writeSessionJson } from "@/lib/client-storage";
+
+type Course = {
+  name: string;
+  code: string;
+};
+
+type UpcomingAssignment = {
+  name: string;
+  due_at: string | null;
+  course_code: string;
+};
 
 export function DashboardView({
   courses,
   upcomingAssignments,
   standardView,
 }: {
-  courses: any[];
-  upcomingAssignments: any[];
+  courses: Course[];
+  upcomingAssignments: UpcomingAssignment[];
   standardView: React.ReactNode;
 }) {
   const router = useRouter();
@@ -21,11 +33,9 @@ export function DashboardView({
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem("dashboard-insights")) {
-        setInsightsVisible(true);
-      }
-    } catch {}
+    if (readLocalJson("dashboard-insights")) {
+      setInsightsVisible(true);
+    }
   }, []);
 
   function handleGenerate() {
@@ -37,16 +47,11 @@ export function DashboardView({
   }
 
   function handleChat() {
-    try {
-      sessionStorage.setItem(
-        "chat-context",
-        JSON.stringify({
-          type: "dashboard",
-          title: "Dashboard",
-          contextData: `Courses: ${courses.map((c) => c.name).join(", ")}\nUpcoming Assignments: ${upcomingAssignments.map((a) => `${a.name} (Due: ${a.due_at})`).join(", ")}`,
-        })
-      );
-    } catch {}
+    writeSessionJson("chat-context", {
+      type: "dashboard",
+      title: "Dashboard",
+      contextData: `Courses: ${courses.map((c) => c.name).join(", ")}\nUpcoming Assignments: ${upcomingAssignments.map((a) => `${a.name} (Due: ${a.due_at})`).join(", ")}`,
+    });
     router.push("/chat");
   }
 

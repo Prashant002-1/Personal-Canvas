@@ -68,6 +68,7 @@ Desktop.ini
 .claude/
 .cursor/
 .gemini/
+.github/
 .mcp.json
 .tessl/
 tessl.json

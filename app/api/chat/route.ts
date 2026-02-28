@@ -241,32 +241,6 @@ Reactive planner snapshot:
 - overdue: ${planner.snapshot.overdue.length}
 - recent announcements: ${planner.snapshot.recentAnnouncements.length}
 - today's events: ${planner.snapshot.todayEvents.length}`,
-      onStepFinish: ({ stepNumber, toolCalls, toolResults, finishReason }) => {
-        console.log("chat-step-finish", {
-          chatId,
-          stepNumber,
-          toolCalls: toolCalls.length,
-          toolResults: toolResults.length,
-          finishReason,
-        });
-      },
-      experimental_onToolCallStart: ({ toolCall }) => {
-        console.log("chat-tool-start", {
-          chatId,
-          toolName: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-        });
-      },
-      experimental_onToolCallFinish: ({ toolCall, durationMs, success, error }) => {
-        console.log("chat-tool-finish", {
-          chatId,
-          toolName: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          durationMs,
-          success,
-          error: error ? String(error) : null,
-        });
-      },
     });
 
     result.consumeStream();

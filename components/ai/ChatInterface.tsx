@@ -111,7 +111,7 @@ export function ChatInterface({
           {messages.length === 0 && (
             <div className="text-center text-muted-foreground py-8">
               <Bot className="w-8 h-8 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">Ask me anything about your courses, deadlines, or study strategy!</p>
+              <p className="text-sm">Ask about coursework, deadlines, or planning.</p>
             </div>
           )}
 
@@ -152,33 +152,19 @@ export function ChatInterface({
                           isRecord(output) && typeof output.uiTarget === "string"
                             ? output.uiTarget
                             : null;
-                        const payload =
-                          isRecord(output) && "payload" in output
-                            ? output.payload
-                            : output;
 
                         return (
                           <div key={part.toolCallId} className="rounded-lg border bg-background/70 p-2 text-xs">
-                            {(summary || uiTarget) && (
-                              <div className="mb-2 space-y-1">
-                                {summary && <p className="font-medium">{summary}</p>}
-                                {uiTarget && (
-                                  <p className="text-muted-foreground">
-                                    UI Target: <span className="font-mono">{uiTarget}</span>
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            <pre className="overflow-x-auto whitespace-pre-wrap break-words text-[11px]">
-                              {JSON.stringify(payload, null, 2)}
-                            </pre>
+                            <p className="font-medium">
+                              {summary ?? (uiTarget ? "Data loaded for this request." : "Analysis updated.")}
+                            </p>
                           </div>
                         );
                       }
 
                       return (
                         <div key={part.toolCallId} className="rounded-lg border bg-background/50 p-2 text-xs text-muted-foreground">
-                          Running {part.type.replace("tool-", "")}...
+                          Processing your request...
                         </div>
                       );
                     })}
