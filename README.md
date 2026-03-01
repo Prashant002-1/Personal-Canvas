@@ -26,10 +26,10 @@ Canvas is the source of truth for a student's academic life — deadlines, sylla
 |---|---|
 | Framework | Next.js 15 (App Router) + React 19 |
 | AI Runtime | Vercel AI SDK — `streamText`, typed tools, multi-step loops |
-| Models | OpenRouter (arcee-ai/trinity-large-preview + nvidia nemotron embed) |
+| Models | OpenRouter model/BYOK configurable |
 | Database | PostgreSQL 16 + pgvector (Docker) |
 | ORM / Queries | Raw `pg` with parameterized SQL |
-| Memory Search | pgvector cosine similarity (2048-dim) + ILIKE fallback |
+| Memory Search | pgvector cosine similarity (2048-dim) |
 | UI | Tailwind CSS, Radix UI, Framer Motion |
 
 ---
@@ -123,7 +123,7 @@ docs/
   DataDefinitions.md   # Canonical field definitions
 parser/
   init.sql             # Schema definition
-Seed.sql               # Demo data (realistic Spring 2026 semester)
+Seed.sql               # Demo data
 ```
 
 ---
