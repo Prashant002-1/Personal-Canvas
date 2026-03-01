@@ -97,11 +97,12 @@ export function Navbar() {
   useEffect(() => {
     setMounted(true);
     const stored = readLocalJson<string>(BOT_NAME_KEY);
-    if (stored) setBotName(stored);
-
-    // reset behavior for the demo because it's annoying otherwise
-    const t = setTimeout(() => setShowOnboarding(true), 800);
-    return () => clearTimeout(t);
+    if (stored) {
+      setBotName(stored);
+    } else {
+      const t = setTimeout(() => setShowOnboarding(true), 800);
+      return () => clearTimeout(t);
+    }
   }, []);
 
   function handleOnboardingDone(name: string) {
